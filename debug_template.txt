@@ -1,0 +1,8 @@
+  std::string path = "data/debug.log";
+
+ std::ofstream outfile(path, std::ios_base::app);
+        if (outfile.is_open()) {
+            outfile << "666" << std::endl;
+            outfile.close();
+        }
+
