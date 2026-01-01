@@ -10,7 +10,7 @@ include(FetchContent)
 # -- 外部库-- 引入 (1) nlohmann/json
 FetchContent_Declare(
   json
-  GIT_REPOSITORY https://github.com/nlohmann/json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
   GIT_TAG v3.11.2)
 
 # (2) cpp-httplib (网络请求)
@@ -27,6 +27,10 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(json httplib ftxui)
 
+# 寻找系统的底层库
+find_package(OpenSSL REQUIRED)
+find_package(Threads REQUIRED)
+
 add_subdirectory(model_utils)
 add_subdirectory(model)
 add_subdirectory(ui_utils)
@@ -39,17 +43,4 @@ endif()
 
 add_executable(shopping_app main.cpp)
 
-target_link_libraries(
-  shopping_app
-  PRIVATE # FTXUI 模块
-          ftxui::screen
-          ftxui::dom
-          ftxui::component
-          # JSON 库
-          nlohmann_json::nlohmann_json
-          # HTTP 库 (httplib 会自动关联 OpenSSL，如果配置正确)
-          httplib::httplib
-          # 系统库(httplib 需要)
-          OpenSSL::SSL
-          OpenSSL::Crypto
-          Threads::Threads)
+target_link_libraries(shopping_app PRIVATE shopping_ui)

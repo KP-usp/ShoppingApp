@@ -1,4 +1,6 @@
 #include "OrderPage.h"
+#include "SharedComponent.h"
+#include <fstream>
 
 void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                             std::function<void()> on_shopping) {
@@ -29,12 +31,13 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
         for (auto it = orders_map_ptr->rbegin(); it != orders_map_ptr->rend();
              ++it) {
             long long order_id = it->first;
-            FullOrder full_order = it->second;
+            FullOrder &full_order = it->second;
 
             // 容纳单个订单的空按钮组件(为了添加滚动属性)
             auto item_logic = Button("", [] {}, ButtonOption::Simple());
 
-            auto item_renderer = Renderer(item_logic, [=, &ctx] {
+            auto item_renderer = Renderer(item_logic, [&full_order, &ctx, this,
+                                                       order_id, item_logic] {
                 Elements product_rows;
 
                 // 数据准备
@@ -55,6 +58,9 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                     text(" 下单: " +
                          Utils::time_to_string(full_order.order_time)),
                     filler(),
+                    text("收货地址: " + full_order.address) |
+                        color(Color::Cyan),
+                    filler(),
                     text("预计送达: " + format_arrived_time + " ") |
                         color(Color::Green),
                 }));
@@ -68,7 +74,8 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                         double item_total = prod_opt->price * item.count;
                         product_rows.push_back(hbox({
                             text(" • " + prod_opt->product_name) |
-                                size(WIDTH, GREATER_THAN, 15),
+                                size(WIDTH, GREATER_THAN, 15) |
+                                color(Color::Blue),
                             filler(),
                             text("x " + std::to_string(item.count)),
                             filler(),
@@ -85,11 +92,11 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                     product_rows.push_back(separator()); // 分割线
 
                     // 快递费
-                    product_rows.push_back(
-                        hbox({text(" • " + delivery_choices[idx]) |
-                                  size(WIDTH, GREATER_THAN, 12),
-                              filler(),
-                              text("￥" + Utils::format_price(delivery_fee))}));
+                    product_rows.push_back(hbox(
+                        {text(" • " + delivery_choices[idx]) |
+                             color(Color::Cyan) | size(WIDTH, GREATER_THAN, 12),
+                         filler(),
+                         text("￥" + Utils::format_price(delivery_fee))}));
 
                     // 总价高亮显示
                     product_rows.push_back(hbox(
@@ -126,17 +133,12 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
             Renderer([] { return text("暂无订单记录") | center | flex; }));
     }
 
-    auto scroller_renderer = Renderer(order_container, [order_container] {
-        return order_container->Render() | vscroll_indicator |
-               frame   // 限制高度并处理滚动
-               | flex; // 占据垂直布局的剩余空间
-    });
-
-    auto layout = Container::Vertical({scroller_renderer, btn_container});
+    auto scroller_container = SharedComponents::Scroller(order_container);
+    auto layout = Container::Vertical({scroller_container, btn_container});
 
     this->component = Renderer(layout, [=] {
         return vbox({text("我的订单") | bold | center | border,
-                     scroller_renderer->Render(), separator(),
+                     scroller_container->Render(), separator(),
                      hbox({
                          filler(),
                          btn_to_cart->Render(),

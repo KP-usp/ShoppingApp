@@ -242,6 +242,7 @@ std::vector<CartItem> CartManager::checkout(int user_id) {
             auto current_pos = iofile.tellg();
             auto item_head_pos = current_pos - (std::streamoff)sizeof(CartItem);
             item.status = CartItemStatus::DELETED;
+            item.delivery_selection = -1;
 
             iofile.seekp(item_head_pos);
             iofile.write(reinterpret_cast<const char *>(&item),

@@ -68,6 +68,9 @@ class ShopAppUI {
     void run() {
         auto screen = ScreenInteractive::Fullscreen();
 
+        // 任何持有 ctx 的页面都可以通过调用 ctx.request_repaint() 来刷新屏幕
+        ctx.request_repaint = [&screen] { screen.Post(Event::Custom); };
+
         // 创建页面实例(cart_layout 和 order_layout 都需要登录后创建)
         login_layout =
             std::make_shared<LoginLayOut>(ctx, on_login_success, on_register);
@@ -145,12 +148,8 @@ class ShopAppUI {
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1s); // 等待 1 秒
 
-                // PostEvent 是线程安全的，它会告诉 FTXUI
-                // 主循环：“有事发生了，重绘一下”
-                // Event::Custom
-                // 是自定义事件，不会干扰用户的输入，只是为了触发
-                // Render
-                screen.Post(Event::Custom);
+                // 刷新页面
+                ctx.request_repaint();
             }
         });
 

@@ -101,5 +101,14 @@ ShopAppUI::ShopAppUI(AppContext &context) : ctx(context) {
 
         order_container_slot->DetachAllChildren();
         order_container_slot->Add(order_layout->get_component());
+
+        std::string path2 = "data/debug.log";
+
+        std::ofstream outfile2(path2, std::ios_base::app);
+        if (outfile2.is_open()) {
+
+            outfile2 << "Order 已经成功刷新了 " << std::endl;
+            outfile2.close();
+        }
     };
 }

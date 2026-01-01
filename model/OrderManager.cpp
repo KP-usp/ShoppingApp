@@ -27,30 +27,47 @@ FileErrorCode OrderManager::load_full_orders(const int user_id,
         return FileErrorCode::OpenFailure;
     }
 
+    std::ofstream log("debug_load.log");
+
     OrderItem temp;
+    int count = 0;
 
     while (infile.read(reinterpret_cast<char *>(&temp), sizeof(OrderItem))) {
+        count++;
+        // 每读10条打印一次，或者每条都打印
+        log << "Reading Item " << count << ", OrderID: " << temp.order_id
+            << std::flush;
 
         if (temp.id == user_id) {
-            orders_map[temp.order_id].total_price +=
-                temp.count *
-                    (product_manager.get_price_by_id(temp.product_id)) +
-                DELIVERY_PRICES[temp.delivery_selection];
+            log << " -> Matching User..." << std::flush;
 
-            std::string path = "data/debug.log";
+            FullOrder &order = orders_map[temp.order_id]; // 这里的 map 操作
 
-            std::ofstream outfile(path, std::ios_base::app);
-            if (outfile.is_open()) {
-                outfile << "递送选项："
-                        << DELIVERY_PRICES[temp.delivery_selection]
-                        << std::endl;
-                outfile.close();
+            log << " [Map Accessed] " << std::flush;
+
+            double item_price =
+                product_manager.get_price_by_id(temp.product_id);
+            order.total_price += temp.count * item_price;
+
+            if (order.items.empty()) {
+                log << " [Init Order] " << std::flush;
+                order.total_price += DELIVERY_PRICES[temp.delivery_selection];
+                order.order_id = temp.order_id;
+                order.order_time = temp.order_time;
+
+                // 【重点】这里会触发 FixedString 的赋值
+                order.address = temp.address;
+                log << " [Address Copied]: " + order.address << std::flush;
             }
-            orders_map[temp.order_id].order_id = temp.order_id;
-            orders_map[temp.order_id].order_time = temp.order_time;
-            orders_map[temp.order_id].items.push_back(temp);
+
+            order.items.push_back(temp);
+            log << " -> Done." << std::endl;
+        } else {
+            log << " -> Skipped." << std::endl;
         }
     }
+
+    log << "Loop Finished." << std::endl;
 
     is_loaded = true;
 
@@ -60,14 +77,8 @@ FileErrorCode OrderManager::load_full_orders(const int user_id,
 }
 
 FileErrorCode OrderManager::add_order(const int user_id,
-                                      std::vector<CartItem> cart_lists) {
-
-    string path1 = Utils::get_database_path(m_cart_db_filename);
-    ifstream infile(path1, ios_base::binary);
-    if (!infile.is_open()) {
-        cerr << "open " << path1 << " is failed." << endl;
-        return FileErrorCode::OpenFailure;
-    }
+                                      std::vector<CartItem> cart_lists,
+                                      const std::string address) {
 
     time_t time = get_current_time();
 
@@ -76,7 +87,7 @@ FileErrorCode OrderManager::add_order(const int user_id,
     for (auto cart_item : cart_lists) {
 
         OrderItem new_order(cart_item.id, cart_item.product_id, cart_item.count,
-                            time, cart_item.delivery_selection);
+                            time, cart_item.delivery_selection, address);
         order_list.push_back(new_order);
     }
 

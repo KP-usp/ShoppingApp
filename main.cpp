@@ -21,8 +21,8 @@ int main() {
     string password = "1234";
     string rolename = "user"; // ID 自动生成，为 1
 
-    vector<string> product_name = {"phone", "watch", "computer"};
-    vector<double> price = {3999, 1599, 5999};
+    vector<string> product_name = {"phone", "watch", "computer", "toilet"};
+    vector<double> price = {3999, 1599, 5999, 500};
 
     AppContext ctx(user_db_filename, product_db_filename, cartItem_db_filename,
                    orderItem_db_filename);
@@ -37,7 +37,7 @@ int main() {
     //     return 0;
 
     // 循环添加产品
-    // for (int i = 0; i < 3; i++)
+    // for (int i = 0; i < price.size(); i++)
     //     ctx.product_manager.add_product(product_name[i], price[i]);
 
     my_app.run();

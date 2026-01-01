@@ -9,7 +9,7 @@ template <size_t N> class FixedString {
     using string_view = std::string_view;
 
     // 字面量转换为字符数组
-    void assign(string_view str) {
+    void assign(const string_view str) {
         std::memset(data, 0, N);
         size_t copyLen = std::min(str.length(), N - 1);
         std::memcpy(data, str.data(), copyLen);
@@ -24,14 +24,25 @@ template <size_t N> class FixedString {
     // 支持从字符串字面量构造
     FixedString(const char *str) { assign(str); }
 
+    // 支持从 string 构造
+    FixedString(const std::string &s) { assign(s); }
+
     // 测量字符长度
     size_t length() const { return string_view(data).length(); }
-    // 与上面作用相同
+    // 与上面作用相
     size_t size() const { return length(); }
     // 判断是否为空
     bool empty() const { return data[0] == '\0'; }
     // 最大容量（编译器常量）
     static constexpr size_t capacity() { return N; }
+
+    // 支持相同类型的赋值
+    FixedString &operator=(const FixedString<N> &other) {
+        if (this != &other) {
+            assign(other.data);
+        }
+        return *this;
+    }
 
     // 支持赋值运算符： fs = "world";
     FixedString &operator=(string_view str) {

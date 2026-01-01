@@ -1,4 +1,6 @@
 #include "CartPage.h"
+#include "LocationUtils.h"
+#include "SharedComponent.h"
 #include <algorithm>
 #include <fstream>
 
@@ -40,10 +42,10 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
             // 判断用户是否选择了商品
             // 结账逻辑迁移到弹窗确认结束
             if (all_zero)
-                show_popup = 3;
+                show_popup = 3; // 没有选择商品触发提示弹窗
 
             else
-                show_popup = 1;
+                show_popup = 4; // 触发填写地址弹窗
         });
 
         // 按钮组合
@@ -53,7 +55,7 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
             btn_to_orders,
         });
 
-        // 弹窗按钮
+        // -- 弹窗相关组件 --
 
         // 支付时确定还是取消
         auto btn_payment_yes = Button("确定", [this] { show_popup = 2; });
@@ -85,14 +87,55 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
 
                 // 添加到订单数据库中
                 auto ordered_cart_lists = ctx.cart_manager.checkout(user_id);
-                ctx.order_manager.add_order(user_id, ordered_cart_lists);
 
+                ctx.order_manager.add_order(user_id, ordered_cart_lists,
+                                            input_address);
                 show_popup = 0;
                 checkout_success();
             });
 
+        // 收货地址输入框
+        auto input_address_component =
+            SharedComponents::create_input_with_placeholder(
+                &input_address, "请输入你的收货地址或点击自动获取", false);
+
+        // 自动选择按钮
+        auto btn_get_addr = Button("自动获取", [this, &ctx] {
+            status_text = "正在定位中, 请稍后";
+
+            // 启动一个分离线程
+            std::thread([&] {
+                auto info_opt = LocationUtils::get_current_location();
+
+                if (info_opt.has_value()) {
+                    auto info = info_opt.value();
+
+                    // 将获取的地址存储到类成员中,同时显示在输入框
+                    input_address = info.country + " " + info.region + " " +
+                                    info.city + " ";
+                    status_text = "定位成功！请补充详细门牌号";
+
+                } else
+                    status_text = "定位失败，请检查网络";
+
+                // 刷新屏幕
+                ctx.request_repaint();
+            }).detach();
+        });
+
+        // 确认地址按钮
+        auto btn_assure_addr = Button("确认地址", [this] {
+            if (input_address.empty())
+                status_text = "您输入的地址为空，请重新输入";
+            else
+                show_popup = 1;
+        });
+
+        // 取消选择地址按钮
+        auto btn_addr_no = Button("取消", [this] { show_popup = 0; });
+
         // 支付方式单选框（水平单选框）
-        MenuOption option = MenuOption::Horizontal();
+        MenuOption option;
         option.entries_option.transform = [&](const EntryState &state) {
             std::string prefix = state.active ? "(●) " : "(○) ";
 
@@ -286,6 +329,12 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
         auto popup_hint_no_choice_layout =
             Container::Vertical({btn_hint_no_choice});
 
+        // 弹窗4：送达地址输入弹窗（包含自动获取地址功能）
+        auto popup_addr_btn_contianer =
+            Container::Horizontal({btn_get_addr, btn_assure_addr, btn_addr_no});
+        auto popup_address_input_layout = Container::Vertical(
+            {input_address_component, popup_addr_btn_contianer});
+
         //  关键步骤：给弹窗容器包裹 Renderer 并应用样式
         // 这样让事件系统知道这些组件是被“居中”和“加框”的
         auto popup_payment_renderer = Renderer(popup_payment_layout, [=] {
@@ -306,7 +355,6 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
                            text("提示"),
                            vbox({text("您已成功支付，请按确定返回") | center,
                                  separator(),
-                                 // 这里不需要渲染 menu
                                  btn_hint_payment_success->Render() | center |
                                      size(WIDTH, GREATER_THAN, 10)})) |
                        size(WIDTH, GREATER_THAN, 40) |
@@ -318,9 +366,24 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
                 return window(
                            text("提示"),
                            vbox({text("您还未勾选商品") | center, separator(),
-                                 // 这里不需要渲染 menu
                                  btn_hint_no_choice->Render() | center |
                                      size(WIDTH, GREATER_THAN, 10)})) |
+                       size(WIDTH, GREATER_THAN, 40) |
+                       size(HEIGHT, GREATER_THAN, 8) | clear_under | center;
+            });
+
+        auto popup_address_input_renderer =
+            Renderer(popup_address_input_layout, [=] {
+                return window(
+                           text("收货地址确认") | center,
+                           vbox({input_address_component->Render() | center |
+                                     size(WIDTH, GREATER_THAN, 10),
+                                 text(status_text) | center | color(Color::Red),
+                                 separator(),
+                                 hbox({filler(), btn_get_addr->Render(),
+                                       filler(), btn_assure_addr->Render(),
+                                       filler(), btn_addr_no->Render(),
+                                       filler()})})) |
                        size(WIDTH, GREATER_THAN, 40) |
                        size(HEIGHT, GREATER_THAN, 8) | clear_under | center;
             });
@@ -335,6 +398,7 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
                                                      // 提示弹窗(带样式)
                 popup_hint_no_choice_renderer,       // index 3:
                                                      // 提示未选择商品（带样式）
+                popup_address_input_renderer, // index 4: 填写地址弹窗（带样式）
             },
             &show_popup);
 
@@ -343,10 +407,13 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
             // 计算总价
             double total_price = 0.0;
             for (int i = 0; i < cart_list.size(); i++) {
-                int product_id = cart_list[i].product_id;
-                total_price += ctx.product_manager.get_price_by_id(product_id) *
-                                   quantities[i] +
-                               DELIVERY_PRICES[delivery_selections[i]];
+                if (is_chosen[i]) {
+                    int product_id = cart_list[i].product_id;
+                    total_price +=
+                        ctx.product_manager.get_price_by_id(product_id) *
+                            quantities[i] +
+                        DELIVERY_PRICES[delivery_selections[i]];
+                }
             }
 
             auto background_element = vbox(

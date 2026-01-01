@@ -3,6 +3,7 @@
 #include "OrderManager.h"
 #include "ProductManager.h"
 #include "UserManager.h"
+#include <functional>
 
 struct AppContext {
     // std::mutex db_mutex;
@@ -14,6 +15,9 @@ struct AppContext {
     // 全局 UI 状态
     User *current_user = nullptr; // 指向当前登入用户的指针，空则未登入
 
+    // 回调函数，用来存放刷新屏幕的动作, 默认给个空实现
+    std::function<void()> request_repaint = [] {};
+
     // 复制构造函数
     AppContext(const std::string_view &user_db_filename,
                const std::string_view &product_db_filename,
@@ -22,10 +26,11 @@ struct AppContext {
         : user_manager(user_db_filename), product_manager(product_db_filename),
           cart_manager(cart_db_filename), order_manager(order_db_filename) {}
 
-    // 赋值函数
+    // 禁用赋值函数，采用单例
     AppContext &operator=(const AppContext &&) = delete;
     AppContext &operator=(const AppContext &) = delete;
-
-    AppContext(AppContext &&) = delete;
     AppContext &operator=(AppContext &&) = delete;
+
+    // 禁用移动构造函数，采用单例
+    AppContext(AppContext &&) = delete;
 };

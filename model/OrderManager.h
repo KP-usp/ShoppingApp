@@ -10,18 +10,22 @@
 #include <vector>
 
 struct OrderItem {
+    static constexpr int MAX_ADDRESS_LENGTH = 50;
     int id;
     int product_id;
     long long order_id;
     int count;
     time_t order_time;
     int delivery_selection;
+    FixedString<MAX_ADDRESS_LENGTH> address;
 
     OrderItem() = default;
     OrderItem(const int user_id, const int product_id, const int count,
-              const time_t time, const int delivery_selection)
+              const time_t time, const int delivery_selection,
+              const std::string addr)
         : id(user_id), product_id(product_id), count(count), order_time(time),
-          delivery_selection(delivery_selection), order_id(time + user_id) {}
+          delivery_selection(delivery_selection), order_id(time + user_id),
+          address(addr) {}
 };
 
 enum class FullOrderStatus {
@@ -31,16 +35,18 @@ enum class FullOrderStatus {
 };
 
 struct FullOrder {
+    static constexpr int MAX_ADDRESS_LENGTH = 50;
     long long order_id;
     double total_price = 0.0;
     time_t order_time;
     std::vector<OrderItem> items;
+    FixedString<MAX_ADDRESS_LENGTH> address;
 };
 
 constexpr int DELIVERY_PRICES[] = {
-    0, // StandardDelivery (索引0)
-    3, // FastDelivery (索引1)
-    6, // ExpressDelivery (索引2)
+    0, // 普通递送(索引0)
+    3, // 快速递送 (索引1)
+    6, // 特快递送 (索引2)
 };
 
 // 这个订单类负责从购物车数据库的同个用户不同时间点的订单分别打包到内存中
@@ -55,10 +61,6 @@ class OrderManager {
 
     // 数据库文件2： Cart 数据库文件
     std::string m_cart_db_filename;
-
-    // 这是引用，指向AppContext 的文件锁, 当操作 Cart
-    // 数据库加载下单商品时使用·
-    // std::mutex &db_mutex;
 
     // 从数据库中加载的单一用户的订单列表（供 UI 绘制）
     std::map<long long, FullOrder> orders_map;
@@ -91,8 +93,8 @@ class OrderManager {
     }
 
     // 数据库文件添加已下单商品（从 Cart 数据库 load 再重新组装成 OrderItem）
-    FileErrorCode add_order(const int user_id,
-                            std::vector<CartItem> cart_lists);
+    FileErrorCode add_order(const int user_id, std::vector<CartItem> cart_lists,
+                            const std::string address);
 
     // 根据用户 id 和 商品 id
     // 从数据库文件获取购物车商品信息

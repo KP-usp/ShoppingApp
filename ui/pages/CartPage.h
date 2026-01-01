@@ -22,12 +22,18 @@ class CartLayOut {
     // 是否选中商品, 1 代表选中而 0 代表未选中
     std::deque<bool> is_chosen;
 
+    // 存储用户的收货地址
+    std::string input_address;
+
+    // 指示自动获取地址的状态
+    std::string status_text;
+
     // 选择的支付方式（0-支付宝 1-微信 2-银行卡）
     int payment_method = 0;
 
     // 切换弹窗以及背景页面
-    int show_popup =
-        0; // 0-无弹窗 1-支付弹窗 2-提示支付成功弹窗 3-提示未选择商品弹窗
+    int show_popup = 0; // 0-无弹窗 1-支付弹窗 2-提示支付成功弹窗
+                        // 3-提示未选择商品弹窗 4-选择收货地址(包含自动定位)
 
     const std::vector<std::string> delivery_choices = {
         "普通递送（五天后送达，免费）",
@@ -69,6 +75,8 @@ class CartLayOut {
         delivery_selections.clear();
         quantities.clear();
         is_chosen.clear();
+        input_address = "";
+        status_text = "";
 
         init_page(ctx, on_shopping, on_orders_info, delete_item_success,
                   checkout_success);

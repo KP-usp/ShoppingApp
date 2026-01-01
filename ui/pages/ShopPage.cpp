@@ -95,12 +95,13 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
 
                 return hbox({
                     // 列1: 商品名
-                    text("  " + p.product_name) | vcenter | name_style,
+                    text("  " + p.product_name) | vcenter | name_style |
+                        color(Color::Blue),
 
                     separator(),
 
                     // 列2: 价格
-                    text(Utils::format_price(p.price) + "元") | vcenter |
+                    text(Utils::format_price(p.price) + " 元") | vcenter |
                         center | color(Color::Yellow) | price_style,
 
                     separator(),
@@ -148,12 +149,11 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                       // 底部操作区
                       hbox({
                           filler(),
-                          btn_add->Render() | size(WIDTH, GREATER_THAN, 20),
+                          btn_add->Render(),
                           filler(),
-                          btn_to_cart->Render() | size(WIDTH, GREATER_THAN, 20),
+                          btn_to_cart->Render(),
                           filler(),
-                      }) | size(HEIGHT, EQUAL, 5) |
-                          center
+                      })
 
                 }) |
                 border;
