@@ -2,12 +2,18 @@
 #include "CartManager.h"
 #include "FileError.h"
 #include "ProductManager.h"
+#include <chrono>
 #include <map>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
+
+enum class FullOrderStatus {
+    NOT_COMPLETED = 0, // 未抵达
+    COMPLETED = 1,     // 已抵达
+    CANCEL = -1,       // 取消
+};
 
 struct OrderItem {
     static constexpr int MAX_ADDRESS_LENGTH = 50;
@@ -18,20 +24,15 @@ struct OrderItem {
     time_t order_time;
     int delivery_selection;
     FixedString<MAX_ADDRESS_LENGTH> address;
+    FullOrderStatus status; // 与聚合物一致的状态
 
     OrderItem() = default;
     OrderItem(const int user_id, const int product_id, const int count,
               const time_t time, const int delivery_selection,
-              const std::string addr)
+              const std::string addr, const FullOrderStatus s)
         : id(user_id), product_id(product_id), count(count), order_time(time),
           delivery_selection(delivery_selection), order_id(time + user_id),
-          address(addr) {}
-};
-
-enum class FullOrderStatus {
-    NOT_COMPLETED = 0, // 未抵达
-    COMPLETED = 1,     // 已抵达
-    CANCEL = -1,       // 取消
+          address(addr), status(s) {}
 };
 
 struct FullOrder {
@@ -41,10 +42,11 @@ struct FullOrder {
     time_t order_time;
     std::vector<OrderItem> items;
     FixedString<MAX_ADDRESS_LENGTH> address;
+    FullOrderStatus status = FullOrderStatus::NOT_COMPLETED; // 聚合状态
 };
 
 constexpr int DELIVERY_PRICES[] = {
-    0, // 普通递送(索引0)
+    0, // 普通递送 (索引0)
     3, // 快速递送 (索引1)
     6, // 特快递送 (索引2)
 };
@@ -75,16 +77,24 @@ class OrderManager {
         return in_time_t;
     }
 
+    // 辅助：通用更新函数，根据 order_id 更新特定字段
+    // mode: 0 = cancel, 1 = update info
+    FileErrorCode
+    update_order_in_file(long long order_id,
+                         std::optional<FullOrderStatus> new_status,
+                         std::optional<std::string> new_address,
+                         std::optional<int> new_delivery);
+
   public:
     OrderManager(const string_view &order_db_filename)
         : m_order_db_filename(order_db_filename) {}
 
-    // 从 Order
-    // 数据库打包不同时间批次订单到内存（orders_map）
+    // 加载并聚合订单
+    // UI层可以通过检查 FullOrder.status
+    // 来过滤“正在进行”或“历史”订单(HistoryOrderPage)
     FileErrorCode load_full_orders(const int user_id,
                                    ProductManager &product_manager);
 
-    // 获取从数据库中导入的商品列表
     std::optional<std::map<long long, FullOrder> *> get_orders_map_ptr() {
         if (is_loaded)
             return &orders_map;
@@ -92,19 +102,18 @@ class OrderManager {
             return std::nullopt;
     }
 
-    // 数据库文件添加已下单商品（从 Cart 数据库 load 再重新组装成 OrderItem）
+    // 下单
     FileErrorCode add_order(const int user_id, std::vector<CartItem> cart_lists,
                             const std::string address);
 
-    // 根据用户 id 和 商品 id
-    // 从数据库文件获取购物车商品信息
-    std::optional<OrderItem> get_order(const int user_id, const int product_id);
+    // 取消订单
+    // 将该 order_id 下的所有 Item 状态置为 CANCEL
+    FileErrorCode cancel_order(long long order_id);
 
-    // 更新数据库中购物车商品(这里指定购物车商品默认状态为未下单)
-    FileErrorCode update_order(const int user_id, const int product_id,
-                               const int count);
-    // // 删除数据库中订单，这里不完善
-    // FileErrorCode delete_order(const int user_id, const int product_id);
+    // 更新订单信息 (包含地址和配送服务)
+    FileErrorCode update_order_info(long long order_id,
+                                    const std::string &new_address,
+                                    int new_delivery_selection);
 
     ~OrderManager() {}
 };

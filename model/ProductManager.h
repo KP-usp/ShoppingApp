@@ -26,9 +26,7 @@ struct Product {
 
     Product(const std::string_view &name, const double p, const int id = -1,
             ProductStatus s = ProductStatus::NORMAL)
-        : product_id(id), price(p), status(s) {
-        this->product_name = name;
-    }
+        : product_id(id), product_name(name), price(p), status(s) {}
 };
 
 // 商品管理类

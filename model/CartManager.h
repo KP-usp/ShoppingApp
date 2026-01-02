@@ -1,7 +1,6 @@
 #pragma once
 #include "FileError.h"
 #include <Utils.h>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -36,9 +35,6 @@ class CartManager {
   private:
     // 数据库文件
     std::string m_db_filename;
-
-    // 这是引用，指向AppContext 的文件锁 ·
-    // std::mutex &db_mutex;
 
     // 从数据库中导出的未下单的购物车商品
     std::vector<CartItem> cart_list;

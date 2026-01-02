@@ -1,6 +1,7 @@
 #pragma once
 #include "AppContext.h"
 #include "CartPage.h"
+#include "HistoryOrderPage.h"
 #include "LoginPage.h"
 #include "OrderPage.h"
 #include "RegisterPage.h"
@@ -33,13 +34,16 @@ class ShopAppUI {
     std::shared_ptr<ShopLayOut> shop_layout;
     std::shared_ptr<CartLayOut> cart_layout;
     std::shared_ptr<OrderLayOut> order_layout;
+    std::shared_ptr<HistoryOrderLayOut> history_order_layout;
 
     // 定义“外壳”，为了刷新商品页面
     Component shop_container_slot = Container::Vertical({});
 
-    // 定义“外壳”, 专门用来放购物车页面和订单页面(需要登录后才能启用)
+    // 定义“外壳”, 专门用来放购物车页面,订单页面, 或历史订单页面
+    // UI(需要登录后初始化)
     Component cart_container_slot = Container::Vertical({});
     Component order_container_slot = Container::Vertical({});
+    Component history_order_container_slot = Container::Vertical({});
 
     Component main_container; // 整个 App 的主容器
     Component tab_container;  // 页面切换容器
@@ -59,6 +63,8 @@ class ShopAppUI {
     std::function<void()> add_cart;            // 添加购物车商品时刷新 cart_page
     std::function<void()> delete_item_success; // 删除购物车商品刷新 cart_page
     std::function<void()> checkout_success;    // 结账刷新 cart_page
+    std::function<void()> on_history_orders_info; // 前往历史订单页
+    std::function<void()> on_orders_update;       // 修改或删除订单
 
   public:
     explicit ShopAppUI(AppContext &context);
@@ -71,28 +77,29 @@ class ShopAppUI {
         // 任何持有 ctx 的页面都可以通过调用 ctx.request_repaint() 来刷新屏幕
         ctx.request_repaint = [&screen] { screen.Post(Event::Custom); };
 
-        // 创建页面实例(cart_layout 和 order_layout 都需要登录后创建)
+        // 创建页面实例(cart_layout、order_layout、 history_order_layout
+        // 都需要登录后创建)
         login_layout =
             std::make_shared<LoginLayOut>(ctx, on_login_success, on_register);
         register_layout = std::make_shared<RegisterLayOut>(
             ctx, on_register_success, on_login);
         shop_layout = std::make_shared<ShopLayOut>(ctx, on_checkout, add_cart);
-
-        // 登录前先初始化 sho_page, cart_page 和 order_page 外壳(其实可以为空)
-        cart_container_slot->Add(
-            Renderer([] { return text("请先登陆以查看购物车") | center; }));
-
-        order_container_slot->Add(
-            Renderer([] { return text("请先登陆以查看订单页面") | center; }));
         shop_container_slot->Add(shop_layout->get_component());
 
         // 使用 Tab 容器进行路由管理
         // 当 tab_index 变化时，显示的组件也会变化
         // 这里 cart_component 开始时是 “空壳”
         auto tab_content = Container::Tab(
-            {login_layout->get_component(), register_layout->get_component(),
-             shop_container_slot, cart_container_slot, order_container_slot},
+            {
+                login_layout->get_component(),
+                register_layout->get_component(),
+                shop_container_slot,
+                cart_container_slot,
+                order_container_slot,
+                history_order_container_slot,
+            },
             &tab_index);
+
         // 注销组件(放在导航栏中)
         auto btn_logout = Button("注销", [this] { on_logout_success(); });
 

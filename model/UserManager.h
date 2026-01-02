@@ -42,11 +42,8 @@ class User {
     User(const std::string_view &username, const std::string_view &password,
          const std::string_view &rolename, const int user_id = -1,
          const UserStatus status = UserStatus::USER_NORMAL)
-        : id(user_id), status(status) {
-        this->username = username;
-        this->password = password;
-        this->rolename = rolename;
-    };
+        : id(user_id), username(username), password(password),
+          rolename(rolename), status(status) {};
 };
 
 class UserManager { // 管理用户类

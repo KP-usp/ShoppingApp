@@ -239,15 +239,17 @@ std::vector<CartItem> CartManager::checkout(int user_id) {
         // 订单需要添加未下单但是已经勾选的商品
         if (item.id == user_id && item.status == CartItemStatus::NOT_ORDERED &&
             item.delivery_selection != -1) {
+            items.push_back(item);
+
             auto current_pos = iofile.tellg();
             auto item_head_pos = current_pos - (std::streamoff)sizeof(CartItem);
+
             item.status = CartItemStatus::DELETED;
             item.delivery_selection = -1;
 
             iofile.seekp(item_head_pos);
             iofile.write(reinterpret_cast<const char *>(&item),
                          sizeof(CartItem));
-            items.push_back(item);
         }
     }
 

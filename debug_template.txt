@@ -6,3 +6,21 @@
             outfile.close();
         }
 
+std::ofstream outfile1(path, std::ios_base::app);
+        if (outfile1.is_open()) {
+            outfile1 << "666" << std::endl;
+            outfile1.close();
+        }
+
+
+std::ofstream outfile2(path, std::ios_base::app);
+        if (outfile2.is_open()) {
+            outfile2 << "666" << std::endl;
+            outfile2.close();
+        }
+
+// 焦点状态
+                
+
+
+

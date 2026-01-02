@@ -12,8 +12,8 @@ using std::vector;
 int main() {
 
     string user_db_filename = "UserInfoDatabase.dat";
-    string product_db_filename = "ProductInforDatabase.dat";
-    string cartItem_db_filename = "CartInforDatabase.dat";
+    string product_db_filename = "ProductInfoDatabase.dat";
+    string cartItem_db_filename = "CartInfoDatabase.dat";
     string orderItem_db_filename = "OrderInfoDatabase.dat";
 
     // 用户

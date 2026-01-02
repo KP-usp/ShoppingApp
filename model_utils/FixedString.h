@@ -6,57 +6,48 @@
 
 template <size_t N> class FixedString {
   private:
-    using string_view = std::string_view;
-
-    // 字面量转换为字符数组
-    void assign(const string_view str) {
-        std::memset(data, 0, N);
+    void assign(std::string_view str) {
         size_t copyLen = std::min(str.length(), N - 1);
-        std::memcpy(data, str.data(), copyLen);
+
+        if (copyLen > 0) {
+            std::memcpy(data, str.data(), copyLen);
+        }
+
+        data[copyLen] = '\0';
     }
 
   public:
     char data[N];
 
-    // 默认构造：清零
-    FixedString() { std::memset(data, 0, N); }
+    // 默认构造
+    FixedString() { data[0] = '\0'; }
 
-    // 支持从字符串字面量构造
-    FixedString(const char *str) { assign(str); }
+    FixedString(const char *str) {
+        assign(str); // 或者 assign(std::string_view(str));
+    }
 
-    // 支持从 string 构造
-    FixedString(const std::string &s) { assign(s); }
+    FixedString(std::string_view s) { assign(s); }
 
-    // 测量字符长度
-    size_t length() const { return string_view(data).length(); }
-    // 与上面作用相
+    size_t length() const { return std::string_view(data).length(); }
     size_t size() const { return length(); }
-    // 判断是否为空
     bool empty() const { return data[0] == '\0'; }
-    // 最大容量（编译器常量）
     static constexpr size_t capacity() { return N; }
 
-    // 支持相同类型的赋值
-    FixedString &operator=(const FixedString<N> &other) {
-        if (this != &other) {
-            assign(other.data);
-        }
+    // 赋值运算符也只需要一个
+    FixedString &operator=(std::string_view s) {
+        assign(s);
         return *this;
     }
 
-    // 支持赋值运算符： fs = "world";
-    FixedString &operator=(string_view str) {
-        assign(str);
-        return *this;
+    // 隐式转换为 string_view
+    operator std::string_view() const {
+        return std::string_view(data, length());
     }
+
     // 支持加法运算符： fs += "hello"
     friend std::string operator+(const FixedString<N> &fs,
                                  std::string_view str) {
-        // 利用 string_view 隐式转换和 std::string 的 operator+
         return std::string(static_cast<std::string_view>(fs)) +
                std::string(str);
     }
-
-    // 隐式转换为 string_view, 方便打印和比较
-    operator string_view() const { return string_view(data); }
 };

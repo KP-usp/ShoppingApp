@@ -18,11 +18,13 @@ ShopAppUI::ShopAppUI(AppContext &context) : ctx(context) {
         shop_container_slot->DetachAllChildren();
         shop_container_slot->Add(shop_layout->get_component());
 
-        // 处理 cartpage, orderpage , 将其重新变为空壳
+        // 处理 cartpage, orderpage , historyorderpage 将其重新变为空壳
         cart_container_slot->DetachAllChildren();
         cart_layout.reset();
         order_container_slot->DetachAllChildren();
         order_layout.reset();
+        history_order_container_slot->DetachAllChildren();
+        history_order_layout.reset();
 
         // 用户登出
         ctx.current_user = nullptr;
@@ -31,21 +33,31 @@ ShopAppUI::ShopAppUI(AppContext &context) : ctx(context) {
     };
 
     on_login_success = [&, this] {
-        // 初始化购物车页面
+        std::string path = "data/debug.log";
 
+        // 初始化购物车页面
         cart_layout =
             std::make_shared<CartLayOut>(ctx, on_shopping, on_orders_info,
                                          delete_item_success, checkout_success);
 
         // 初始化订单页面
-        order_layout =
-            std::make_shared<OrderLayOut>(ctx, on_checkout, on_shopping);
+        order_layout = std::make_shared<OrderLayOut>(
+            ctx, on_checkout, on_shopping, on_history_orders_info,
+            on_orders_update);
+
+        // 初始化历史订单页面
+        history_order_layout = std::make_shared<HistoryOrderLayOut>(
+            ctx, on_orders_info, on_shopping);
 
         // 加载用户内容
         cart_container_slot->DetachAllChildren();
         order_container_slot->DetachAllChildren();
+        history_order_container_slot->DetachAllChildren();
+
         cart_container_slot->Add(cart_layout->get_component());
         order_container_slot->Add(order_layout->get_component());
+        history_order_container_slot->Add(
+            history_order_layout->get_component());
 
         tab_index = 2; // 跳转到商城页面
     };
@@ -97,18 +109,24 @@ ShopAppUI::ShopAppUI(AppContext &context) : ctx(context) {
         cart_container_slot->DetachAllChildren();
         cart_container_slot->Add(cart_layout->get_component());
 
-        order_layout->refresh(ctx, on_checkout, on_shopping);
+        order_layout->refresh(ctx, on_checkout, on_shopping,
+                              on_history_orders_info, on_orders_update);
 
         order_container_slot->DetachAllChildren();
         order_container_slot->Add(order_layout->get_component());
-
-        std::string path2 = "data/debug.log";
-
-        std::ofstream outfile2(path2, std::ios_base::app);
-        if (outfile2.is_open()) {
-
-            outfile2 << "Order 已经成功刷新了 " << std::endl;
-            outfile2.close();
-        }
     };
+
+    on_orders_update = [&, this] {
+        order_layout->refresh(ctx, on_checkout, on_shopping,
+                              on_history_orders_info, on_orders_update);
+        order_container_slot->DetachAllChildren();
+        order_container_slot->Add(order_layout->get_component());
+
+        history_order_layout->refresh(ctx, on_orders_info, on_shopping);
+        history_order_container_slot->DetachAllChildren();
+        history_order_container_slot->Add(
+            history_order_layout->get_component());
+    };
+
+    on_history_orders_info = [&, this] { tab_index = 5; };
 }

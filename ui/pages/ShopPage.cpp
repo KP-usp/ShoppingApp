@@ -15,6 +15,7 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
         ctx.product_manager.get_product_list_ptr().value_or(nullptr);
 
     if (product_list_ptr && !product_list_ptr->empty()) {
+
         auto &product_list = *product_list_ptr;
 
         // 商品的总数量

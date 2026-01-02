@@ -51,11 +51,7 @@ inline Element get_clock_element() {
 
 // 用来包裹容器，使其支持鼠标滚轮和滚动条
 inline Component Scroller(Component child) {
-    auto renderer = Renderer(child, [child] {
-        return child->Render() | vscroll_indicator | frame | flex;
-    });
-
-    return CatchEvent(renderer, [child](Event event) {
+    auto logic = CatchEvent(child, [child](Event event) {
         if (event.is_mouse()) {
             if (event.mouse().button == Mouse::WheelDown) {
                 child->OnEvent(Event::ArrowDown);
@@ -65,16 +61,13 @@ inline Component Scroller(Component child) {
                 child->OnEvent(Event::ArrowUp);
                 return true;
             }
-
-            if (event.mouse().button == Mouse::Left) {
-                if (child->OnEvent(event)) {
-                    return true;
-                }
-
-                return true;
-            }
         }
-        return child->OnEvent(event);
+        return false;
+    });
+
+    return Renderer(logic, [child] {
+        return child->Render() | vscroll_indicator | yframe | flex;
     });
 }
+
 }; // namespace SharedComponents

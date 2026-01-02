@@ -1,4 +1,3 @@
-
 #include "OrderManager.h"
 #include "CartManager.h"
 #include <fstream>
@@ -23,51 +22,35 @@ FileErrorCode OrderManager::load_full_orders(const int user_id,
     string path = Utils::get_database_path(m_order_db_filename);
     ifstream infile(path, std::ios_base::binary);
     if (!infile.is_open()) {
-        cerr << "open" << path << "is failed" << endl;
-        return FileErrorCode::OpenFailure;
+        return FileErrorCode::OK; // 可能还没有下过单
     }
 
-    std::ofstream log("debug_load.log");
-
     OrderItem temp;
-    int count = 0;
 
     while (infile.read(reinterpret_cast<char *>(&temp), sizeof(OrderItem))) {
-        count++;
-        // 每读10条打印一次，或者每条都打印
-        log << "Reading Item " << count << ", OrderID: " << temp.order_id
-            << std::flush;
 
         if (temp.id == user_id) {
-            log << " -> Matching User..." << std::flush;
 
-            FullOrder &order = orders_map[temp.order_id]; // 这里的 map 操作
+            FullOrder &order = orders_map[temp.order_id];
 
-            log << " [Map Accessed] " << std::flush;
-
+            // 计算商品价格
             double item_price =
                 product_manager.get_price_by_id(temp.product_id);
             order.total_price += temp.count * item_price;
 
+            // 加载商品的信息，汇总到 map 中
             if (order.items.empty()) {
-                log << " [Init Order] " << std::flush;
                 order.total_price += DELIVERY_PRICES[temp.delivery_selection];
                 order.order_id = temp.order_id;
                 order.order_time = temp.order_time;
 
-                // 【重点】这里会触发 FixedString 的赋值
                 order.address = temp.address;
-                log << " [Address Copied]: " + order.address << std::flush;
+                order.status = temp.status;
             }
 
             order.items.push_back(temp);
-            log << " -> Done." << std::endl;
-        } else {
-            log << " -> Skipped." << std::endl;
         }
     }
-
-    log << "Loop Finished." << std::endl;
 
     is_loaded = true;
 
@@ -81,13 +64,14 @@ FileErrorCode OrderManager::add_order(const int user_id,
                                       const std::string address) {
 
     time_t time = get_current_time();
-
     std::vector<OrderItem> order_list;
 
+    // 添加订单的默认初始状态是 NOT_COMPLETED
     for (auto cart_item : cart_lists) {
 
         OrderItem new_order(cart_item.id, cart_item.product_id, cart_item.count,
-                            time, cart_item.delivery_selection, address);
+                            time, cart_item.delivery_selection, address,
+                            FullOrderStatus::NOT_COMPLETED);
         order_list.push_back(new_order);
     }
 
@@ -98,11 +82,110 @@ FileErrorCode OrderManager::add_order(const int user_id,
         cerr << "open " << path << " is failed." << endl;
         return FileErrorCode::OpenFailure;
     }
+    for (const auto &order : order_list) {
+        outfile.write(reinterpret_cast<const char *>(&order),
+                      sizeof(OrderItem));
+    }
+    outfile.close();
 
-    for (auto order : order_list) {
-        outfile.write(reinterpret_cast<char *>(&order), sizeof(OrderItem));
+    return FileErrorCode::OK;
+}
+
+FileErrorCode OrderManager::update_order_in_file(
+    long long order_id, std::optional<FullOrderStatus> new_status,
+    std::optional<std::string> new_address, std::optional<int> new_delivery) {
+
+    string path = Utils::get_database_path(m_order_db_filename);
+    std::fstream iofile(path, ios_base::binary | ios_base::in | ios_base::out);
+
+    if (!iofile.is_open()) {
+        return FileErrorCode::OpenFailure;
     }
 
-    outfile.close();
-    return FileErrorCode::OK;
+    OrderItem temp;
+    bool found = false;
+
+    // 遍历整个文件，查找所有匹配 order_id 的记录
+    while (iofile.read(reinterpret_cast<char *>(&temp), sizeof(OrderItem))) {
+        if (temp.order_id == order_id) {
+            found = true;
+
+            // 修改需要更新的字段
+            if (new_status.has_value()) {
+                temp.status = new_status.value();
+            }
+            if (new_address.has_value()) {
+                temp.address = new_address.value();
+                std::string path = "data/debug.log";
+
+                std::ofstream outfile(path, std::ios_base::app);
+                if (outfile.is_open()) {
+                    outfile << "新地址：" << new_address.value() << "写成功"
+                            << std::endl;
+                    outfile.close();
+                }
+            }
+            if (new_delivery.has_value()) {
+                temp.delivery_selection = new_delivery.value();
+            }
+
+            // 回退写指针
+            long write_pos = (long)iofile.tellg() - sizeof(OrderItem);
+            iofile.seekp(write_pos);
+
+            iofile.write(reinterpret_cast<const char *>(&temp),
+                         sizeof(OrderItem));
+
+            iofile.seekg(iofile.tellp());
+        }
+    }
+
+    iofile.close();
+    return found ? FileErrorCode::OK : FileErrorCode::NotFound;
+}
+
+FileErrorCode OrderManager::cancel_order(long long order_id) {
+    // 仅更新状态
+    return update_order_in_file(order_id, FullOrderStatus::CANCEL, std::nullopt,
+                                std::nullopt);
+}
+
+FileErrorCode OrderManager::update_order_info(long long order_id,
+                                              const std::string &new_address,
+                                              int new_delivery_selection) {
+    std::string path = "data/debug.log";
+
+    std::ofstream outfile(path, std::ios_base::app);
+    if (outfile.is_open()) {
+        outfile << "新地址：" << new_address << "新配送方式："
+                << new_delivery_selection << std::endl;
+        outfile.close();
+    }
+
+    // "" 表示不修改地址
+    if (new_address.empty()) {
+        std::ofstream outfile1(path, std::ios_base::app);
+        if (outfile1.is_open()) {
+            outfile1 << "我要修改地址" << std::endl;
+            outfile1.close();
+        }
+
+        return update_order_in_file(order_id, std::nullopt, std::nullopt,
+                                    new_delivery_selection);
+    }
+    // -1 表示不修改送达方式
+    if (new_delivery_selection == -1) {
+        std::ofstream outfile1(path, std::ios_base::app);
+        if (outfile1.is_open()) {
+            outfile1 << "我要修改地址" << "id: " << order_id << std::endl;
+            outfile1.close();
+        }
+
+        return update_order_in_file(order_id, std::nullopt, new_address,
+                                    nullopt);
+    }
+
+    // 更新地址和配送方式，保持状态不变
+    return update_order_in_file(order_id, std::nullopt, new_address,
+                                new_delivery_selection);
 }
