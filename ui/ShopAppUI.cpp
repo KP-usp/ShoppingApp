@@ -33,8 +33,6 @@ ShopAppUI::ShopAppUI(AppContext &context) : ctx(context) {
     };
 
     on_login_success = [&, this] {
-        std::string path = "data/debug.log";
-
         // 初始化购物车页面
         cart_layout =
             std::make_shared<CartLayOut>(ctx, on_shopping, on_orders_info,

@@ -59,10 +59,10 @@ class OrderLayOut {
                  std::function<void()> on_history_orders_info,
                  std::function<void()> on_orders_update) {
         component->DetachAllChildren();
-        std::string new_address = "";
-        std::string status_text = "";
-        long long temp_selected_order_id = -1;
-        int temp_selected_delivery_idx = 0;
+        new_address = "";
+        status_text = "";
+        temp_selected_order_id = -1;
+        temp_selected_delivery_idx = 0;
 
         init_page(ctx, on_checkout, on_shopping, on_history_orders_info,
                   on_orders_update);

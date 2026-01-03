@@ -28,25 +28,28 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
 
         // 定义交互按钮组件
         // 跳转购物商城页面按钮
-        auto btn_to_shopping =
-            Button("购物商城", [on_shopping] { on_shopping(); });
+        auto btn_to_shopping = Button("购物商城", on_shopping,
+                                      ButtonOption::Animated(Color::Green));
 
         // 跳转订单详情页面按钮
-        auto btn_to_orders =
-            Button("订单详情", [on_orders_info] { on_orders_info(); });
+        auto btn_to_orders = Button("订单详情", on_orders_info,
+                                    ButtonOption::Animated(Color::Cyan));
 
         // 下单按钮
-        auto btn_checkout = Button("确认结账", [this] {
-            bool all_zero = std::all_of(is_chosen.begin(), is_chosen.end(),
-                                        [](bool x) { return x == false; });
-            // 判断用户是否选择了商品
-            // 结账逻辑迁移到弹窗确认结束
-            if (all_zero)
-                show_popup = 3; // 没有选择商品触发提示弹窗
+        auto btn_checkout = Button(
+            "确认结账",
+            [this] {
+                bool all_zero = std::all_of(is_chosen.begin(), is_chosen.end(),
+                                            [](bool x) { return x == false; });
+                // 判断用户是否选择了商品
+                // 结账逻辑迁移到弹窗确认结束
+                if (all_zero)
+                    show_popup = 3; // 没有选择商品触发提示弹窗
 
-            else
-                show_popup = 4; // 触发填写地址弹窗
-        });
+                else
+                    show_popup = 4; // 触发填写地址弹窗
+            },
+            ButtonOption::Animated(Color::Yellow));
 
         // 按钮组合
         auto btn_container = Container::Horizontal({
@@ -166,7 +169,7 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
             CheckboxOption check_opt;
             check_opt.transform = [](const EntryState &s) {
                 // 选中：亮绿色；未选中：暗灰色
-                Color c = s.state ? Color::GreenLight : Color::GrayDark;
+                Color c = s.state ? Color::GreenLight : Color::White;
 
                 // 聚焦：青色（高亮）
                 if (s.focused)
@@ -242,11 +245,9 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
                 bool selected = is_chosen[i];
 
                 // 颜色策略
-                Color border_color =
-                    selected
-                        ? static_cast<Color>(Color::Green)
-                        : (is_focused ? static_cast<Color>(Color::Cyan)
-                                      : static_cast<Color>(Color::GrayDark));
+                Color border_color = is_focused
+                                         ? static_cast<Color>(Color::Cyan)
+                                         : static_cast<Color>(Color::GrayDark);
                 auto bg_color = is_focused
                                     ? static_cast<Color>(Color::Grey23)
                                     : static_cast<Color>(
@@ -417,19 +418,27 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
             }
 
             auto background_element = vbox(
-                {text("购物车列表") | center, separator(),
+                {vbox({
+                     text(" ") | size(HEIGHT, EQUAL, 1),
+                     text(" 购 物 车 ") | bold | center,
+                     text(" —— 心 动 不 如 行 动 —— ") | dim | center |
+                         color(Color::GrayLight),
+                     text(" ") | size(HEIGHT, EQUAL, 1),
+                 }) | borderDouble |
+                     color(Color::YellowLight),
+
                  main_container->Render() | vscroll_indicator | frame | flex,
                  text("总计: " + Utils::format_price(total_price) + " 元") |
                      color(Color::Yellow),
                  hbox({
                      filler(),
-                     btn_to_shopping->Render(),
+                     btn_to_shopping->Render() | size(WIDTH, EQUAL, 15),
                      filler(),
-                     btn_checkout->Render(),
+                     btn_checkout->Render() | size(WIDTH, EQUAL, 15),
                      filler(),
-                     btn_to_orders->Render(),
+                     btn_to_orders->Render() | size(WIDTH, EQUAL, 15),
                      filler(),
-                 })});
+                 }) | size(HEIGHT, EQUAL, 3)});
 
             // 如果没有弹窗，直接返回背景
             if (show_popup == 0) {
@@ -441,12 +450,12 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
     } else {
         // 定义交互按钮组件
         // 跳转购物商城页面按钮
-        auto btn_to_shopping =
-            Button("购物商城", [on_shopping] { on_shopping(); });
+        auto btn_to_shopping = Button("购物商城", on_shopping,
+                                      ButtonOption::Animated(Color::Green));
 
         // 跳转订单详情页面按钮
-        auto btn_to_orders =
-            Button("订单详情", [on_orders_info] { on_orders_info(); });
+        auto btn_to_orders = Button("订单详情", on_orders_info,
+                                    ButtonOption::Animated(Color::Cyan));
 
         auto btn_container = Container::Horizontal({
             btn_to_shopping,
@@ -454,16 +463,25 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
         });
 
         this->component = Renderer(btn_container, [=] {
-            return vbox({text("购物车列表") | center, separator(),
-                         text("购物车为空") | center, separator(),
-                         text("总计: 0 元"),
-                         hbox({
-                             filler(),
-                             btn_to_shopping->Render(),
-                             filler(),
-                             btn_to_orders->Render(),
-                             filler(),
-                         })});
+            return vbox(
+                {vbox({
+                     text(" ") | size(HEIGHT, EQUAL, 1),
+                     text(" 购 物 车 ") | bold | center,
+                     text(" —— 心 动 不 如 行 动 —— ") | dim | center |
+                         color(Color::GrayLight),
+                     text(" ") | size(HEIGHT, EQUAL, 1),
+                 }) | borderDouble |
+                     color(Color::YellowLight),
+
+                 text("您的购物车目前为空,  请去商品页看看吧！") | center,
+                 separator(), text("总计: 0 元"),
+                 hbox({
+                     filler(),
+                     btn_to_shopping->Render() | size(WIDTH, EQUAL, 15),
+                     filler(),
+                     btn_to_orders->Render() | size(WIDTH, EQUAL, 15),
+                     filler(),
+                 }) | size(HEIGHT, EQUAL, 3)});
         });
     }
 }

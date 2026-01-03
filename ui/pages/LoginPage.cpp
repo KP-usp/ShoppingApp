@@ -43,10 +43,10 @@ LoginLayOut::LoginLayOut(AppContext &ctx, std::function<void()> onLoginSuccess,
         return vbox({
                    text("用户登录") | bold | center,
                    separator(),
-                   hbox({text("账号: "), input_username->Render()}) |
-                       size(WIDTH, GREATER_THAN, 20),
-                   hbox({text("密码: "), input_password->Render()}) |
-                       size(WIDTH, GREATER_THAN, 20),
+                   hbox({text("账号: ") | center, input_username->Render()}) |
+                       size(WIDTH, GREATER_THAN, 30),
+                   hbox({text("密码: ") | center, input_password->Render()}) |
+                       size(WIDTH, GREATER_THAN, 30),
                    separator(),
                    hbox({
                        filler(),

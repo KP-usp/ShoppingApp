@@ -1,6 +1,7 @@
 #include "OrderPage.h"
 #include "LocationUtils.h"
 #include "SharedComponent.h"
+#include "Utils.h"
 #include <fstream>
 #include <optional>
 
@@ -14,10 +15,12 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
     ctx.order_manager.load_full_orders(user_id, ctx.product_manager);
 
     // 底部导航按钮
-    auto btn_to_shopping = Button("购物商城", [on_shopping] { on_shopping(); });
-    auto btn_to_cart = Button("返回购物车", [on_checkout] { on_checkout(); });
-    auto btn_to_history = Button(
-        "历史订单", [on_history_orders_info] { on_history_orders_info(); });
+    auto btn_to_shopping =
+        Button("购物商城", on_shopping, ButtonOption::Animated(Color::Green));
+    auto btn_to_cart =
+        Button("返回购物车", on_checkout, ButtonOption::Animated(Color::Cyan));
+    auto btn_to_history = Button("历史订单", on_history_orders_info,
+                                 ButtonOption::Animated(Color::Yellow));
 
     auto btn_container =
         Container::Horizontal({btn_to_cart, btn_to_shopping, btn_to_history});
@@ -204,7 +207,7 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
 
             // 修改按钮组件
             auto btn_modify = Button(
-                " 修改订单 ",
+                " ✎ 修改订单 ",
                 [this, order_id, &ctx] {
                     auto *map_ptr =
                         ctx.order_manager.get_orders_map_ptr().value_or(
@@ -229,7 +232,7 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
 
             // 删除按钮组件
             auto btn_cancel_order = Button(
-                " 取消订单 ",
+                " × 取消订单 ",
                 [this, order_id] {
                     temp_selected_order_id = order_id;
                     show_popup = 6; // 打开取消确认弹窗
@@ -237,12 +240,12 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                 ButtonOption::Ascii());
 
             // 每个订单卡片的组件逻辑
-            auto card_controls = Container::Horizontal(
-                {btn_modify, Renderer([] { return text("  "); }), // 间距
-                 btn_cancel_order});
+            auto card_controls =
+                Container::Horizontal({btn_modify, btn_cancel_order});
 
             auto item_renderer = Renderer(card_controls, [&ctx, this, order_id,
-                                                          card_controls] {
+                                                          btn_modify,
+                                                          btn_cancel_order] {
                 // 重新获取数据指针
                 auto *map_ptr =
                     ctx.order_manager.get_orders_map_ptr().value_or(nullptr);
@@ -269,6 +272,9 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                 time_t arrival_t = Utils::add_days_to_time(
                     full_order.order_time, delivery_required_time[del_idx]);
 
+                auto format_arrival_t =
+                    Utils::specific_hour_to_string(arrival_t);
+
                 Elements rows;
                 // 信息头
                 rows.push_back(
@@ -277,8 +283,7 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                           text(Utils::time_to_string(full_order.order_time)) |
                               color(Color::Green),
                           filler(), text("预计抵达时间: "),
-                          text(Utils::time_to_string(arrival_t)) |
-                              color(Color::Green)}));
+                          text(format_arrival_t) | color(Color::Green)}));
                 rows.push_back(separator());
 
                 // 订单卡片
@@ -324,12 +329,23 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
 
                 // 按钮区域
                 rows.push_back(
-                    hbox({filler(), card_controls->Render(), filler()}));
+                    hbox({filler(), btn_modify->Render() | color(Color::Yellow),
+                          text("       "),
+                          btn_cancel_order->Render() | color(Color::RedLight),
+                          filler()}));
 
                 // 样式包装
-                return vbox(rows) | borderRounded |
-                       (card_controls->Focused() ? color(Color::Blue)
-                                                 : color(Color::GrayLight));
+
+                bool is_focused = btn_modify->Focused() || btn_cancel_order;
+
+                Color border_color =
+                    is_focused ? Color::Cyan : Color::GrayLight;
+                Color bg_color = is_focused
+                                     ? static_cast<Color>(Color::Grey23)
+                                     : static_cast<Color>(Color::Default);
+
+                return vbox(rows) | borderRounded | color(border_color) |
+                       bgcolor(bg_color);
             });
 
             order_container->Add(item_renderer);
@@ -360,36 +376,51 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
         }
 
         auto scroller = SharedComponents::Scroller(order_container);
+        auto main_logic_content =
+            Container::Vertical({scroller, btn_container});
+
+        // 支持滚轮在按钮和卡片之间的切换
+        auto main_view =
+            SharedComponents::allow_scroll_action(main_logic_content);
 
         //  --- 组装主界面逻辑容器 ---
         auto main_logic_container = Container::Tab(
             {
-                Container::Vertical(
-                    {scroller, btn_container}), // Index 0: 主界面
-                popup_select_renderer,          // Index 1: 选择弹窗 (带样式)
-                popup_address_renderer,         // Index 2: 地址输入 (带样式)
-                popup_update_address_success_renderer, // Index 3: 成功 (带样式)
+                main_view,              // Index 0: 主界面
+                popup_select_renderer,  // Index 1: 选择弹窗 (带样式)
+                popup_address_renderer, // Index 2: 地址输入 (带样式)
+                popup_update_address_success_renderer, // Index 3: 成功
+                                                       // (带样式)
                 popup_delivery_renderer,               // Index 4: 配送 (带样式)
-                popup_update_delivery_success_renderer, // Index 5: 复用成功弹窗
+                popup_update_delivery_success_renderer, // Index 5:
+                                                        // 复用成功弹窗
                 popup_cancel_renderer // Index 6: 取消确认 (带样式) },
             },
             &show_popup);
 
         this->component = Renderer(main_logic_container, [=] {
             auto background =
-                vbox({text("我的订单 (进行中)") | bold | center | border,
-                      scroller->Render() | flex,
+                vbox({// 标题栏
+                      vbox({
+                          text(" ") | size(HEIGHT, EQUAL, 1),
+                          text(" 当 前 订 单 ") | bold | center,
+                          text(" —— 正 在 快 马 加 鞭 为 您 送 达 —— ") | dim |
+                              center | color(Color::GrayLight),
+                          text(" ") | size(HEIGHT, EQUAL, 1),
+                      }) | borderDouble |
+                          color(Color::YellowLight),
+
+                      scroller->Render() | flex, separatorHeavy(),
+
                       hbox({
                           filler(),
-                          btn_to_cart->Render(),
+                          btn_to_cart->Render() | size(WIDTH, EQUAL, 15),
                           filler(),
+                          btn_to_shopping->Render() | size(WIDTH, EQUAL, 15),
                           filler(),
-                          btn_to_shopping->Render(),
+                          btn_to_history->Render() | size(WIDTH, EQUAL, 15),
                           filler(),
-                          btn_to_history->Render(),
-                          filler(),
-                      }),
-                      separator()});
+                      }) | size(HEIGHT, EQUAL, 3)});
 
             // 如果没有弹窗，直接返回背景
             if (show_popup == 0) {
@@ -412,11 +443,25 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
             Container::Vertical({order_container, btn_container});
 
         this->component = Renderer(main_logic_container, [=] {
-            return vbox({text("我的订单 (进行中)") | bold | center | border,
-                         order_container->Render() | flex, separator(),
-                         hbox({filler(), btn_to_cart->Render(), filler(),
-                               btn_to_shopping->Render(), filler(),
-                               btn_to_history->Render(), filler()})});
+            return vbox({// 标题栏
+                         vbox({
+                             text(" ") | size(HEIGHT, EQUAL, 1),
+                             text(" 当 前 订 单 ") | bold | center,
+                             text(" —— 正 在 快 马 加 鞭 为 您 送 达 —— ") |
+                                 dim | center | color(Color::GrayLight),
+                             text(" ") | size(HEIGHT, EQUAL, 1),
+                         }) | borderDouble |
+                             color(Color::YellowLight),
+
+                         hbox({
+                             filler(),
+                             btn_to_cart->Render() | size(WIDTH, EQUAL, 15),
+                             filler(),
+                             btn_to_shopping->Render() | size(WIDTH, EQUAL, 15),
+                             filler(),
+                             btn_to_history->Render() | size(WIDTH, EQUAL, 15),
+                             filler(),
+                         }) | size(HEIGHT, EQUAL, 3)});
         });
     }
 }

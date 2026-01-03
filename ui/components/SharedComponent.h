@@ -31,11 +31,13 @@ inline Component create_input_with_placeholder(std::string *content,
             element = element | color(Color::Cyan);
         }
 
+        Color border_color = Color::GrayDark; // 默认边框颜色
         if (state.focused) {
-            element = element | bold | ftxui::select | bgcolor(Color::White);
+            border_color = Color::White;
+            element = element | bold;
         }
 
-        return element;
+        return element | borderRounded | color(border_color);
     };
 
     return Input(content, option);
@@ -49,24 +51,27 @@ inline Element get_clock_element() {
            color(Color::Cyan);
 }
 
-// 用来包裹容器，使其支持鼠标滚轮和滚动条
+// 标准的 Scroller
 inline Component Scroller(Component child) {
-    auto logic = CatchEvent(child, [child](Event event) {
-        if (event.is_mouse()) {
-            if (event.mouse().button == Mouse::WheelDown) {
+    return Renderer(child, [child] {
+        return child->Render() | vscroll_indicator | yframe | flex;
+    });
+}
+
+// 允许响应滚轮
+inline Component allow_scroll_action(Component child) {
+    return CatchEvent(child, [child](Event e) {
+        if (e.is_mouse()) {
+            if (e.mouse().button == Mouse::WheelDown) {
                 child->OnEvent(Event::ArrowDown);
                 return true;
             }
-            if (event.mouse().button == Mouse::WheelUp) {
+            if (e.mouse().button == Mouse::WheelUp) {
                 child->OnEvent(Event::ArrowUp);
                 return true;
             }
         }
         return false;
-    });
-
-    return Renderer(logic, [child] {
-        return child->Render() | vscroll_indicator | yframe | flex;
     });
 }
 

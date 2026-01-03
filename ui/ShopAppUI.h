@@ -114,25 +114,42 @@ class ShopAppUI {
         auto layout = Renderer(final_content, [&] {
             Element page = tab_content->Render();
 
-            // 如果未登录，只显示页面内容（即登录页）
             if (ctx.current_user == nullptr) {
                 return page;
             }
 
-            // 如果已登录，显示顶部导航栏 + 页面内容
-            return vbox(
-                {hbox({// 给文本加上 |
-                       // vcenter，让它相对于这一行最高的元素（按钮）居中
-                       text(" 购物软件 ") | bold | vcenter, filler(),
+            auto header_content = hbox(
+                {text("  "),
+
+                 hbox({text("🛒 ") | size(WIDTH, EQUAL, 2),
+                       text("购物商城") | bold | color(Color::CyanLight)}) |
+                     vcenter | flex,
+
+                 hbox({filler(), text("🕒 ") | vcenter,
                        SharedComponents::get_clock_element() |
-                           vcenter, // 时钟也可能需要居中
-                       filler(),
-                       text("用户: " + ctx.current_user->username) |
-                           vcenter, // 用户名居中
-                       filler(), logout_logic->Render()}) |
-                     inverted | size(HEIGHT, EQUAL, 3),
-                 page | flex});
+                           color(Color::White) | vcenter,
+                       filler()}) |
+                     flex,
+
+                 hbox({filler(),
+                       text("Hi, ") | dim | color(Color::GrayLight) | vcenter,
+                       text(ctx.current_user->username + "") | bold |
+                           color(Color::Gold1) | vcenter,
+                       text("  ") | size(WIDTH, EQUAL, 2),
+                       separator() | color(Color::GrayDark),
+                       text("  ") | size(WIDTH, EQUAL, 1),
+                       logout_logic->Render()}) |
+                     flex,
+
+                 text("  ")});
+
+            auto header =
+                vbox({header_content, separator() | color(Color::GrayDark)}) |
+                bgcolor(Color::Grey11);
+
+            return vbox({header, page | flex});
         });
+
         // 全局按键捕获 (Global Event Handler)
         // 处理导航快捷键, 提供按 “q” 退出
         auto main_logic = CatchEvent(layout, [&, this](Event event) {

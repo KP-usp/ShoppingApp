@@ -13,11 +13,11 @@ void HistoryOrderLayOut::init_page(AppContext &ctx,
     //  底部交互按钮
     auto btn_to_shopping =
         Button("返回商城", on_shopping, ButtonOption::Animated(Color::Green));
-    auto btn_to_cart =
+    auto btn_to_orders_info =
         Button("订单详情", on_orders_info, ButtonOption::Animated(Color::Cyan));
 
     auto btn_container = Container::Horizontal({
-        btn_to_cart,
+        btn_to_orders_info,
         btn_to_shopping,
     });
 
@@ -62,24 +62,31 @@ void HistoryOrderLayOut::init_page(AppContext &ctx,
                     full_order.order_time,
                     delivery_required_time[delivery_idx]);
 
+                auto format_arrival_t =
+                    Utils::specific_hour_to_string(arrival_t);
+
                 // 订单状态
                 std::string order_status;
+                Element status_text;
 
-                if (full_order.status == FullOrderStatus::CANCEL)
+                if (full_order.status == FullOrderStatus::CANCEL) {
                     order_status = "订单已取消";
-                if (full_order.status == FullOrderStatus::COMPLETED)
+                    status_text = text(order_status) | color(Color::RedLight);
+                }
+                if (full_order.status == FullOrderStatus::COMPLETED) {
                     order_status = "订单已完成";
-
+                    status_text =
+                        text(order_status) | color(Color::GreenLight) | bold;
+                }
                 // --- 信息头 ---
                 content.push_back(
                     hbox({text(" 订单号: " + std::to_string(order_id)),
                           text("    "), text(" 下单时间: "),
                           text(Utils::time_to_string(full_order.order_time)) |
                               color(Color::Green),
-                          filler(), text("订单状态: " + order_status), filler(),
+                          filler(), text("订单状态: "), status_text, filler(),
                           text("预计抵达时间: "),
-                          text(Utils::time_to_string(arrival_t)) |
-                              color(Color::Green)
+                          text(format_arrival_t) | color(Color::Green)
 
                     }));
                 content.push_back(separatorLight());
@@ -133,12 +140,21 @@ void HistoryOrderLayOut::init_page(AppContext &ctx,
                         color(Color::Yellow) | bold,
                 }));
 
-                // 组装最终卡片样式
-                auto card = vbox(std::move(content)) | border;
+                // 样式包装
 
-                // 焦点高亮处理
-                if (item_logic->Focused()) {
-                    card = card | color(Color::White) | bgcolor(Color::Blue);
+                bool is_focused = item_logic->Focused();
+
+                Color border_color =
+                    is_focused ? Color::Cyan : Color::GrayLight;
+                Color bg_color = is_focused
+                                     ? static_cast<Color>(Color::Grey23)
+                                     : static_cast<Color>(Color::Default);
+
+                // 组装最终卡片样式
+                auto card = vbox(content) | borderRounded |
+                            color(border_color) | bgcolor(bg_color);
+                if (is_focused) {
+                    card = card | focus;
                 }
 
                 return card;
@@ -156,51 +172,61 @@ void HistoryOrderLayOut::init_page(AppContext &ctx,
             btn_container,
         });
 
+        // 支持滚轮在按钮和卡片之间的切换
+        auto main_view = SharedComponents::allow_scroll_action(main_layout);
+
         // 最终渲染
-        this->component = Renderer(main_layout, [=] {
-            return vbox({// 标题栏
-                         vbox({
-                             text(" 历史订单中心 ") | bold | center,
-                             text(" 查看您的消费足迹 ") | dim | center,
-                         }) | borderDouble |
-                             color(Color::YellowLight),
+        this->component = Renderer(main_view, [=] {
+            return vbox(
+                {// 标题栏
+                 vbox({
+                     text(" ") | size(HEIGHT, EQUAL, 1),
+                     text(" 历 史 订 单") | bold | center,
+                     text(" —— 查 看 您 的 消 费 足 迹 —— ") | dim | center |
+                         color(Color::GrayLight),
+                     text(" ") | size(HEIGHT, EQUAL, 1),
+                 }) | borderDouble |
+                     color(Color::YellowLight),
 
-                         // 中间滚动区
-                         scroller->Render() | flex,
+                 // 中间滚动区
+                 scroller->Render() | flex,
 
-                         // 底部操作区 (使用 filler 实现要求的布局)
-                         separatorHeavy(),
-                         hbox({
-                             filler(),
-                             btn_to_cart->Render() | size(WIDTH, EQUAL, 15),
-                             filler(),
-                             btn_to_shopping->Render() | size(WIDTH, EQUAL, 15),
-                             filler(),
-                         }) | size(HEIGHT, EQUAL, 3) |
-                             center});
+                 // 底部操作区 (使用 filler 实现要求的布局)
+                 separatorHeavy(),
+                 hbox({
+                     filler(),
+                     btn_to_orders_info->Render() | size(WIDTH, EQUAL, 20),
+                     filler(),
+                     btn_to_shopping->Render() | size(WIDTH, EQUAL, 20),
+                     filler(),
+                 }) | size(HEIGHT, EQUAL, 3)});
         });
 
     } else {
 
         this->component = Renderer(btn_container, [=] {
-            return vbox({// 标题栏
-                         vbox({
-                             text(" 历史订单中心 ") | bold | center,
-                             text(" 查看您的消费足迹 ") | dim | center,
-                         }) | borderDouble |
-                             color(Color::YellowLight),
+            return vbox(
+                {// 标题栏
+                 vbox({
+                     text(" ") | size(HEIGHT, EQUAL, 1),
+                     text(" 历 史 订 单") | bold | center,
+                     text(" —— 查 看 您 的 消 费 足 迹 —— ") | dim | center |
+                         color(Color::GrayLight),
+                     text(" ") | size(HEIGHT, EQUAL, 1),
+                 }) | borderDouble |
+                     color(Color::YellowLight),
 
-                         text("暂无历史订单记录"),
+                 text("暂无历史订单记录"),
 
-                         separatorHeavy(),
-                         hbox({
-                             filler(),
-                             btn_to_cart->Render() | size(WIDTH, EQUAL, 15),
-                             filler(),
-                             btn_to_shopping->Render() | size(WIDTH, EQUAL, 15),
-                             filler(),
-                         }) | size(HEIGHT, EQUAL, 3) |
-                             center});
+                 separatorHeavy(),
+                 hbox({
+                     filler(),
+                     btn_to_orders_info->Render() | size(WIDTH, EQUAL, 15),
+                     filler(),
+                     btn_to_shopping->Render() | size(WIDTH, EQUAL, 15),
+                     filler(),
+                 }) | size(HEIGHT, EQUAL, 3) |
+                     center});
         });
     }
 }

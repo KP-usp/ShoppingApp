@@ -26,15 +26,6 @@ FileErrorCode CartManager::load_cart(const int user_id) {
 
     while (infile.read(reinterpret_cast<char *>(&temp), sizeof(CartItem))) {
         if (temp.status == CartItemStatus::NOT_ORDERED) {
-
-            std::string path = Utils::get_database_path("debug.log");
-
-            std::ofstream outfile(path, std::ios_base::app);
-            if (outfile.is_open()) {
-                outfile << "加载商品: " << temp.product_id << " load_cart数量："
-                        << temp.count << std::endl;
-                outfile.close();
-            }
             cart_list.emplace_back(temp);
         }
     }
@@ -81,14 +72,6 @@ CartManager::find_item(const int user_id, const int product_id,
 
 FileErrorCode CartManager::add_item(const int user_id, const int product_id,
                                     const int count) {
-
-    std::string path1 = Utils::get_database_path("debug.log");
-    std::ofstream outfile1(path1, std::ios_base::app);
-    if (outfile1.is_open()) {
-        outfile1 << "商品号 " << product_id << " add_item 商品的数量: " << count
-                 << std::endl;
-        outfile1.close();
-    }
 
     auto [pos_not_ordered, item_not_ordered] =
         find_item(user_id, product_id, {CartItemStatus::NOT_ORDERED});

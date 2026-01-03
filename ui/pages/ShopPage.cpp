@@ -1,11 +1,8 @@
 #include "ShopPage.h"
+#include "SharedComponent.h"
 #include <algorithm>
 #include <fstream>
 #include <vector>
-
-auto name_style = [](Element e) { return e | flex; };
-auto price_style = [](Element e) { return e | size(WIDTH, EQUAL, 15); };
-auto qty_style = [](Element e) { return e | size(WIDTH, EQUAL, 20); };
 
 void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                            std::function<void()> add_cart) {
@@ -24,24 +21,17 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
         // 初始化每个商品的购买数量状态
         quantities = std::vector<int>(count, 0);
 
-        // 商品信息表头（商品名、商品价格、 送达时间选项、购买商品数量）
-        auto product_header =
-            hbox({text("  商品名称") | vcenter | name_style, separator(),
-                  text("单价") | center | price_style, separator(),
-                  text("购买数量") | center | qty_style,
-                  text(" ") | size(WIDTH, EQUAL, 2)}) |
-            size(HEIGHT, EQUAL, 3) | inverted | bold;
-
         // 创建主容器（垂直布局）, 用来放所有的商品行
         auto main_container = Container::Vertical({});
 
         // 跳转购物车页面按钮
-        auto btn_to_cart =
-            Button("前往购物车", [on_checkout] { on_checkout(); });
+        auto btn_to_cart = Button("前往购物车", on_checkout,
+                                  ButtonOption::Animated(Color::Cyan));
 
         // 添加到购物车 按钮
-        auto btn_add =
-            Button("加入购物车", [&ctx, this, &product_list, add_cart] {
+        auto btn_add = Button(
+            "加入购物车",
+            [&ctx, this, &product_list, add_cart] {
                 if (all_of(quantities.begin(), quantities.end(),
                            [](int x) { return x == 0; })) {
                     show_popup = 1;
@@ -62,7 +52,8 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                     // 刷新购物车页面
                     add_cart();
                 }
-            });
+            },
+            ButtonOption::Animated(Color::Green));
 
         // 弹窗组件（当用户没有选择任何商品还点击加入购物车进行提示）
         auto hint_popup = Button("确定", [this] { show_popup = 0; });
@@ -91,73 +82,102 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                 // 判断是否有购买数量，改变高亮状态
                 bool has_qty = qty > 0;
 
-                auto qty_color = has_qty ? static_cast<Color>(Color::GreenLight)
-                                         : static_cast<Color>(Color::Default);
+                // 获取焦点状态
+                bool is_focused = row_layout->Focused();
 
-                return hbox({
-                    // 列1: 商品名
-                    text("  " + p.product_name) | vcenter | name_style |
-                        color(Color::Blue),
+                //  颜色策略
+                Color border_color = is_focused ? Color::Cyan : Color::GrayDark;
+                Color bg_color = is_focused
+                                     ? static_cast<Color>(Color::Grey23)
+                                     : static_cast<Color>(Color::Default);
+                Color qty_text_color =
+                    has_qty ? Color::GreenLight : Color::GrayLight;
 
-                    separator(),
+                // [UI 修改] 构建左侧部分：装饰条或图标
+                auto left_part =
+                    vbox({filler(),
+                          text("商品") | center | color(Color::BlueLight),
+                          text(std::to_string(i + 1)) | center | dim,
+                          filler()}) |
+                    size(WIDTH, EQUAL, 6);
 
-                    // 列2: 价格
-                    text(Utils::format_price(p.price) + " 元") | vcenter |
-                        center | color(Color::Yellow) | price_style,
+                // 构建右侧部分：详情信息
+                auto right_part =
+                    vbox(
+                        {// 第一行：商品名称 和 价格
+                         hbox({text(" " + p.product_name) | bold |
+                                   size(WIDTH, GREATER_THAN, 15) |
+                                   color(Color::White),
+                               filler(),
+                               text(Utils::format_price(p.price) + " 元") |
+                                   color(Color::Gold1) | bold}),
 
-                    separator(),
+                         separator() | color(Color::GrayDark), // 弱化的分割线
 
-                    // 列3: 数量控制 (+ 0 -)
-                    hbox({btn_increment->Render() | vcenter,
-                          text("" + std::to_string(qty)) | center |
-                              size(WIDTH, EQUAL, 4) | vcenter | bold |
-                              color(qty_color),
-                          btn_decrement->Render()}) |
-                        center | qty_style | size(HEIGHT, EQUAL, 3),
+                         // 第二行：操作区（数量控制）
+                         hbox({text("购买数量: ") | vcenter |
+                                   color(Color::GrayLight),
 
-                    separator(),
+                               hbox({btn_decrement->Render() | vcenter,
+                                     text(" " + std::to_string(qty) + " ") |
+                                         bold | center | size(WIDTH, EQUAL, 4) |
+                                         vcenter | color(qty_text_color),
+                                     btn_increment->Render() | vcenter}) |
+                                   borderRounded | color(Color::GrayLight),
 
-                }); // 每一行的边框
+                               filler()})}) |
+                    flex; // padding
+
+                // 组合卡片
+                return hbox({left_part, separator(), right_part}) |
+                       borderRounded | color(border_color) | bgcolor(bg_color);
             });
             main_container->Add(row_renderer);
         }
 
-        auto action_container =
+        auto btn_container =
             Container::Horizontal({btn_add | flex, btn_to_cart | flex});
 
-        auto page_container =
-            Container::Vertical({main_container, action_container});
+        auto scroller = SharedComponents::Scroller(main_container);
 
-        auto final_container =
-            Container::Tab({page_container, hint_popup}, (int *)&show_popup);
+        auto page_container =
+            Container::Vertical({main_container, btn_container});
+
+        auto scroll_page_container =
+            SharedComponents::allow_scroll_action(page_container);
+
+        auto final_container = Container::Tab(
+            {scroll_page_container, hint_popup}, (int *)&show_popup);
 
         // 最终返回一个可滚动的页面
         this->component = Renderer(final_container, [=] {
-            auto background =
-                vbox({// 标题栏
-                      hbox({text("商 品 列 表") | bold | center}) |
-                          borderRounded,
+            auto background = vbox(
+                {// 标题栏
+                 vbox({
+                     text(" ") | size(HEIGHT, EQUAL, 1),
+                     text(" 商   品   列   表 ") | bold | center |
+                         color(Color::Cyan),
+                     text(" —— 物 美 价 廉  任 君 挑 选  —— ") | dim | center |
+                         color(Color::GrayLight),
+                     text(" ") | size(HEIGHT, EQUAL, 1),
 
-                      // 表头
-                      product_header, separator(),
+                 }) | borderDouble |
+                     color(Color::Cyan),
+                 // 列表内容区 (带滚动条)
+                 main_container->Render() | vscroll_indicator | frame | flex,
 
-                      // 列表内容区 (带滚动条)
-                      main_container->Render() | vscroll_indicator | frame |
-                          flex,
+                 separator(),
 
-                      separator(),
+                 // 底部操作区
+                 hbox({
+                     filler(),
+                     btn_add->Render() |
+                         size(WIDTH, EQUAL, 20), // 固定宽度更好看
+                     filler(),
+                     btn_to_cart->Render() | size(WIDTH, EQUAL, 20),
+                     filler(),
+                 }) | size(HEIGHT, EQUAL, 3)});
 
-                      // 底部操作区
-                      hbox({
-                          filler(),
-                          btn_add->Render(),
-                          filler(),
-                          btn_to_cart->Render(),
-                          filler(),
-                      })
-
-                }) |
-                border;
             if (show_popup == 1) {
                 auto popup_content =
                     vbox({text("您还没有选择商品") | center, separator(),
@@ -174,11 +194,14 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
         });
     } else {
         this->component = Renderer([] {
-            return vbox({
-                text("商品列表") | center,
-                separator(),
-                text("暂无商品") | center,
-            });
+            return vbox({vbox({
+                             text(" 商 品 列 表 ") | bold | center,
+                         }) | borderDouble |
+                             color(Color::CyanLight),
+
+                         filler(), text("暂无商品信息") | center | bold,
+                         text("请联系管理员添加商品") | center | dim,
+                         filler()});
         });
     }
 }

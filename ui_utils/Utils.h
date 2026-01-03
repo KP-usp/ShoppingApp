@@ -37,8 +37,8 @@ inline std::string time_to_string(const time_t time) {
 inline std::string specific_hour_to_string(const time_t time) {
 
     std::stringstream ss;
-    // 格式化为：2025年12月19日
-    ss << std::put_time(std::localtime(&time), "%Y年%m月%d日");
+    // 格式化为：2025-12-19
+    ss << std::put_time(std::localtime(&time), "%Y-%m-%d");
     return ss.str();
 }
 

@@ -56,18 +56,18 @@ RegisterLayOut::RegisterLayOut(AppContext &ctx,
                 text("用户注册") | bold | center,
                 separator(),
                 hbox({
-                    text("新用户名:   "),
+                    text("新用户名:   ") | center,
                     input_username->Render(),
-                }) | size(WIDTH, GREATER_THAN, 25),
+                }) | size(WIDTH, GREATER_THAN, 30),
                 hbox({
-                    text("新密码:     "),
+                    text("新密码:     ") | center,
                     input_password->Render(),
-                }) | size(WIDTH, GREATER_THAN, 25),
+                }) | size(WIDTH, GREATER_THAN, 30),
 
                 hbox({
-                    text("验证新密码: "),
+                    text("验证新密码: ") | center,
                     input_again_password->Render(),
-                }) | size(WIDTH, GREATER_THAN, 25),
+                }) | size(WIDTH, GREATER_THAN, 30),
 
                 separator(),
                 hbox({

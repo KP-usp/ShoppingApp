@@ -116,14 +116,6 @@ FileErrorCode OrderManager::update_order_in_file(
             }
             if (new_address.has_value()) {
                 temp.address = new_address.value();
-                std::string path = "data/debug.log";
-
-                std::ofstream outfile(path, std::ios_base::app);
-                if (outfile.is_open()) {
-                    outfile << "新地址：" << new_address.value() << "写成功"
-                            << std::endl;
-                    outfile.close();
-                }
             }
             if (new_delivery.has_value()) {
                 temp.delivery_selection = new_delivery.value();
@@ -153,34 +145,13 @@ FileErrorCode OrderManager::cancel_order(long long order_id) {
 FileErrorCode OrderManager::update_order_info(long long order_id,
                                               const std::string &new_address,
                                               int new_delivery_selection) {
-    std::string path = "data/debug.log";
-
-    std::ofstream outfile(path, std::ios_base::app);
-    if (outfile.is_open()) {
-        outfile << "新地址：" << new_address << "新配送方式："
-                << new_delivery_selection << std::endl;
-        outfile.close();
-    }
-
     // "" 表示不修改地址
     if (new_address.empty()) {
-        std::ofstream outfile1(path, std::ios_base::app);
-        if (outfile1.is_open()) {
-            outfile1 << "我要修改地址" << std::endl;
-            outfile1.close();
-        }
-
         return update_order_in_file(order_id, std::nullopt, std::nullopt,
                                     new_delivery_selection);
     }
     // -1 表示不修改送达方式
     if (new_delivery_selection == -1) {
-        std::ofstream outfile1(path, std::ios_base::app);
-        if (outfile1.is_open()) {
-            outfile1 << "我要修改地址" << "id: " << order_id << std::endl;
-            outfile1.close();
-        }
-
         return update_order_in_file(order_id, std::nullopt, new_address,
                                     nullopt);
     }
