@@ -1,11 +1,7 @@
-file(GLOB UTILS_SOURCES "*.cpp")
+add_library(ui_utils INTERFACE)
 
-add_library(ui_utils STATIC ${UTILS_SOURCES})
-
-target_include_directories(ui_utils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(ui_utils INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(
-  ui_utils
-  PUBLIC httplib::httplib nlohmann_json::nlohmann_json OpenSSL::SSL
-         OpenSSL::Crypto Threads::Threads
-  INTERFACE shopping_model)
+  ui_utils INTERFACE httplib::httplib nlohmann_json::nlohmann_json OpenSSL::SSL
+                     OpenSSL::Crypto Threads::Threads shopping_model)

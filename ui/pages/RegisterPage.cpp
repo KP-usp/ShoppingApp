@@ -23,12 +23,7 @@ RegisterLayOut::RegisterLayOut(AppContext &ctx,
         if (ctx.user_manager.check_register(*username, *password,
                                             *again_password,
                                             *message) == Result::SUCCESS) {
-
             show_popup = 1;
-            User temp(*username, *password,
-                      "user"); // id 生成的逻辑还需在 UserManager 类中补充
-            ctx.user_manager.append_user(
-                temp); // 这里自动为新创建的用户创建了 ID
         }
     });
 

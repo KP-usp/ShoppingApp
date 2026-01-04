@@ -3,6 +3,7 @@
 #include "FileError.h"
 #include "FixedString.h"
 #include "Result.h"
+#include "SecurityUtils.h"
 #include <Utils.h>
 #include <memory>
 #include <optional>
@@ -27,12 +28,13 @@ class User {
     static constexpr size_t MAX_PASSWORD_SIZE = 16 + 1;
     static constexpr size_t MIN_USERNAME_SIZE = 2 + 1;
     static constexpr size_t MIN_PASSWORD_SIZE = 5 + 1;
+    static constexpr size_t HASH_PASSWORD_SIZE = 97 + 1;
 
     int id;
 
     FixedString<MAX_USERNAME_SIZE> username;
 
-    FixedString<MAX_PASSWORD_SIZE> password;
+    FixedString<HASH_PASSWORD_SIZE> password;
 
     FixedString<MAX_ROLENAME_SIZE> rolename;
 
@@ -77,9 +79,9 @@ class UserManager { // 管理用户类
     void mark_deleted(User &user) { user.status = UserStatus::USER_DELETED; }
 
     // 辅助函数：验证密码
-    Result check_password(const string_view &input_password,
-                          const string_view &stored_password) {
-        if (input_password == stored_password)
+    Result check_password(const string &input_password,
+                          const string &stored_password) {
+        if (SecurityUtils::check_password(input_password, stored_password))
             return Result::SUCCESS;
         else
             return Result::FAILURE;
@@ -92,8 +94,7 @@ class UserManager { // 管理用户类
     }
 
     // 用户登入验证
-    std::optional<User> check_login(const string_view &username,
-                                    const string_view &password);
+    Result check_login(const string &username, const string &password);
 
     static Result is_valid_username_format(const string &username,
                                            string &error_message);

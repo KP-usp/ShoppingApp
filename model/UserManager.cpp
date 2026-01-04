@@ -58,23 +58,23 @@ int UserManager::generate_and_update_id() {
     return new_id;
 }
 
-optional<User> UserManager::check_login(const string_view &username,
-                                        const string_view &password) {
+Result UserManager::check_login(const string &username,
+                                const string &input_password) {
 
     optional<User> user_opt = get_user(username);
 
     if (user_opt.has_value()) {
         User user = user_opt.value();
-        string_view stored_password = user.password;
-        if (check_password(password, stored_password) == Result::SUCCESS) {
+        if (check_password(input_password, string(user.password)) ==
+            Result::SUCCESS) {
             active_user =
                 std::make_unique<User>(user.username, user.rolename,
                                        user.password, user.id, user.status);
-            return user_opt;
+            return Result::SUCCESS;
         }
     }
 
-    return nullopt;
+    return Result::FAILURE;
 }
 
 Result UserManager::is_valid_username_format(const string &username,
@@ -117,14 +117,23 @@ Result UserManager::check_register(const string &username,
     if (is_valid_username_format(username, error_message) == Result::FAILURE ||
         is_valid_password_format(password, error_message) == Result::FAILURE)
         return Result::FAILURE;
-    else if (password != again_password) {
-        error_message = "两次输入的密码不一致";
-        return Result::FAILURE;
-    } else if (get_user(username).has_value()) {
+    if (get_user(username).has_value()) {
         error_message = "用户名已存在";
         return Result::FAILURE;
-    } else
-        return Result::SUCCESS;
+    }
+
+    if (password != again_password) {
+        error_message = "两次输入的密码不一致";
+        return Result::FAILURE;
+    }
+
+    string hash_password = SecurityUtils::hash_password(password);
+
+    // 添加加密密码的用户
+    User temp(username, hash_password, "user");
+    append_user(temp);
+
+    return Result::SUCCESS;
 }
 
 FileErrorCode UserManager::append_user(const User &new_user) {

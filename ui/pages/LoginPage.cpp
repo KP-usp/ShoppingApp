@@ -13,10 +13,8 @@ LoginLayOut::LoginLayOut(AppContext &ctx, std::function<void()> onLoginSuccess,
 
     // 登录按钮
     Component btn_login = Button("登录", [&ctx, this, onLoginSuccess] {
-        std::optional<User> user_opt =
-            ctx.user_manager.check_login(*username, *password);
-
-        if (user_opt.has_value()) {
+        if (ctx.user_manager.check_login(*username, *password) ==
+            Result::SUCCESS) {
             *message = "";
             ctx.current_user = ctx.user_manager.get_current_user();
 
