@@ -75,4 +75,17 @@ inline Component allow_scroll_action(Component child) {
     });
 }
 
+// 通用的一个带确定按钮的弹窗组件渲染（带样式）
+inline Element popup_with_button_element(Component button, Element background,
+                                         const std::string &hint_text) {
+    auto popup_content =
+        vbox({text(hint_text) | center, separator(),
+              button->Render() | center | size(WIDTH, GREATER_THAN, 10)});
+
+    auto popup_window = window(text("提示"), popup_content);
+    return dbox({background, popup_window | size(WIDTH, GREATER_THAN, 40) |
+                                 size(HEIGHT, GREATER_THAN, 8) | clear_under |
+                                 center});
+}
+
 }; // namespace SharedComponents

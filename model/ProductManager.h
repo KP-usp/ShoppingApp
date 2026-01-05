@@ -10,6 +10,7 @@
 
 // 商品状态：是否删除
 enum class ProductStatus {
+    OUT_OF_STOCK = -2,
     DELETED = -1,
     NORMAL = 0,
 };
@@ -20,13 +21,15 @@ struct Product {
     FixedString<MAX_PRODUCT_NAME_SIZE> product_name;
     int product_id;
     double price;
+    int stock;
     ProductStatus status;
 
     Product() = default;
 
-    Product(const std::string_view &name, const double p, const int id = -1,
-            ProductStatus s = ProductStatus::NORMAL)
-        : product_id(id), product_name(name), price(p), status(s) {}
+    Product(const std::string_view &name, const double p, const int stock,
+            const int id = -1, ProductStatus s = ProductStatus::NORMAL)
+        : product_id(id), product_name(name), price(p), stock(stock),
+          status(s) {}
 };
 
 // 商品管理类
@@ -57,6 +60,9 @@ class ProductManager {
         product.status = ProductStatus::DELETED;
     }
 
+    // 检查商品的库存, 库存为 0 就更新商品状态
+    FileErrorCode check_stock();
+
   public:
     ProductManager(const string_view &db_filename)
         : m_db_filename(db_filename) {
@@ -75,14 +81,16 @@ class ProductManager {
     };
 
     // 向数据库添加商品
-    FileErrorCode add_product(const string_view &product_name, const int price);
+    FileErrorCode add_product(const string_view &product_name,
+                              const double price, const int stock);
 
     // 删除数据库中的商品（添加删除标志）
     FileErrorCode delete_product(const int product_id);
 
     // 更新数据库中的商品
     FileErrorCode update_product(const string_view &new_product_name,
-                                 const int product_id, const int new_price);
+                                 const int product_id, const double new_price,
+                                 const int stock);
 
     // 根据商品 id 获取商品信息
     std::optional<Product> get_product(const int product_id);

@@ -14,7 +14,8 @@ struct AppContext {
     HistoryOrderManager history_order_manager;
 
     // 全局 UI 状态
-    User *current_user = nullptr; // 指向当前登入用户的指针，空则未登入
+    std::shared_ptr<User> current_user =
+        nullptr; // 指向当前登入用户的指针，空则未登入
 
     // 回调函数，用来存放刷新屏幕的动作, 默认给个空实现
     std::function<void()> request_repaint = [] {};

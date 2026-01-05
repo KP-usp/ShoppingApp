@@ -78,12 +78,15 @@ class OrderManager {
     }
 
     // 辅助：通用更新函数，根据 order_id 更新特定字段
-    // mode: 0 = cancel, 1 = update info
     FileErrorCode
-    update_order_in_file(long long order_id,
+    update_order_in_file(const long long order_id,
                          std::optional<FullOrderStatus> new_status,
                          std::optional<std::string> new_address,
                          std::optional<int> new_delivery);
+    // 辅助：根据 order_id 获取相应订单所有商品的 product_id 和 购买数量,
+    // 据此更新商品库存
+    FileErrorCode update_stock_by_order_id(const long long order_id,
+                                           ProductManager product_manager);
 
   public:
     OrderManager(const string_view &order_db_filename)
@@ -106,14 +109,15 @@ class OrderManager {
     FileErrorCode add_order(const int user_id, std::vector<CartItem> cart_lists,
                             const std::string address);
 
-    // 取消订单
+    // 取消订单, 并更新商品库存
     // 将该 order_id 下的所有 Item 状态置为 CANCEL
-    FileErrorCode cancel_order(long long order_id);
+    FileErrorCode cancel_order(const long long order_id,
+                               ProductManager &product_manager);
 
     // 更新订单信息 (包含地址和配送服务)
-    FileErrorCode update_order_info(long long order_id,
+    FileErrorCode update_order_info(const long long order_id,
                                     const std::string &new_address,
-                                    int new_delivery_selection);
+                                    const int new_delivery_selection);
 
     ~OrderManager() {}
 };

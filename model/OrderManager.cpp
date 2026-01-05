@@ -92,7 +92,7 @@ FileErrorCode OrderManager::add_order(const int user_id,
 }
 
 FileErrorCode OrderManager::update_order_in_file(
-    long long order_id, std::optional<FullOrderStatus> new_status,
+    const long long order_id, std::optional<FullOrderStatus> new_status,
     std::optional<std::string> new_address, std::optional<int> new_delivery) {
 
     string path = Utils::get_database_path(m_order_db_filename);
@@ -136,15 +136,48 @@ FileErrorCode OrderManager::update_order_in_file(
     return found ? FileErrorCode::OK : FileErrorCode::NotFound;
 }
 
-FileErrorCode OrderManager::cancel_order(long long order_id) {
+FileErrorCode
+OrderManager::update_stock_by_order_id(const long long order_id,
+                                       ProductManager product_manager) {
+    string path = Utils::get_database_path(m_order_db_filename);
+    std::fstream iofile(path, ios_base::binary | ios_base::in | ios_base::out);
+
+    if (!iofile.is_open()) {
+        return FileErrorCode::OpenFailure;
+    }
+
+    OrderItem temp;
+    bool found = false;
+
+    // 遍历整个文件，查找所有匹配 order_id 的记录
+    while (iofile.read(reinterpret_cast<char *>(&temp), sizeof(OrderItem))) {
+        if (temp.order_id == order_id) {
+            int product_id = temp.product_id;
+            int buy_count = temp.count;
+            auto p_opt = product_manager.get_product(product_id);
+            if (p_opt.has_value()) {
+                auto &p = p_opt.value();
+                product_manager.update_product(p.product_name, product_id,
+                                               p.price, p.stock + buy_count);
+            }
+        }
+    }
+    return FileErrorCode::OK;
+}
+
+FileErrorCode OrderManager::cancel_order(const long long order_id,
+                                         ProductManager &product_manager) {
+    // 更新商品库存
+    update_stock_by_order_id(order_id, product_manager);
     // 仅更新状态
     return update_order_in_file(order_id, FullOrderStatus::CANCEL, std::nullopt,
                                 std::nullopt);
 }
 
-FileErrorCode OrderManager::update_order_info(long long order_id,
-                                              const std::string &new_address,
-                                              int new_delivery_selection) {
+FileErrorCode
+OrderManager::update_order_info(const long long order_id,
+                                const std::string &new_address,
+                                const int new_delivery_selection) {
     // "" 表示不修改地址
     if (new_address.empty()) {
         return update_order_in_file(order_id, std::nullopt, std::nullopt,

@@ -14,12 +14,8 @@ class ShopLayOut {
 
     Component component;
 
-    // 弹窗是否启动
-    int show_popup = 0;
-
-    // 增加列宽，让布局更舒展
-    const int W_PRICE = 18;
-    const int W_QTY = 22;
+    // 弹窗 index
+    int show_popup = 0; // 0-商品页 1-没选商品添加提示 2-库存不足添加提示
 
   public:
     // 构造体：创建商城页面组件，并通过接受购买结算函数跳转购物车页面
@@ -37,10 +33,10 @@ class ShopLayOut {
     // 刷新页面
     void refresh(AppContext &ctx, std::function<void()> on_checkout,
                  std::function<void()> add_cart) {
-        // 清空容器，重置 vector d成员
+        // 清空容器，重置 vector 成员
         component->DetachAllChildren();
         quantities.clear();
-
+        show_popup = 0;
         init_page(ctx, on_checkout, add_cart);
     }
 };

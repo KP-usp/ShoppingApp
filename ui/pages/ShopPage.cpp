@@ -2,6 +2,7 @@
 #include "SharedComponent.h"
 #include <algorithm>
 #include <fstream>
+#include <string>
 #include <vector>
 
 void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
@@ -35,18 +36,25 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                 if (all_of(quantities.begin(), quantities.end(),
                            [](int x) { return x == 0; })) {
                     show_popup = 1;
+                    return;
                 } else {
 
                     for (int i = 0; i < product_list.size(); i++) {
+
                         int qty = (quantities)[i];
 
                         if (qty > 0) {
+                            if (product_list[i].stock - qty <= 0) {
+                                show_popup = 2;
+                                return;
+                            }
+
                             Product &p = (product_list)[i];
 
                             // 添加到购物车数据库中
                             ctx.cart_manager.add_item((*ctx.current_user).id,
                                                       p.product_id, qty);
-                            (quantities)[i] = 0;
+                            quantities[i] = 0;
                         }
                     }
                     // 刷新购物车页面
@@ -55,8 +63,11 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
             },
             ButtonOption::Animated(Color::Green));
 
-        // 弹窗组件（当用户没有选择任何商品还点击加入购物车进行提示）
-        auto hint_popup = Button("确定", [this] { show_popup = 0; });
+        // 弹窗组件
+        // 用户没有选择任何商品时点击加入购物车
+        auto hint_popup_for_qty = Button("确定", [this] { show_popup = 0; });
+        // 用户在库存为 0 时点击加入购物车
+        auto hint_popup_for_stock = Button("确定", [this] { show_popup = 0; });
 
         // 循环生成每一行的组件
         for (int i = 0; i < count; ++i) {
@@ -101,6 +112,14 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                           filler()}) |
                     size(WIDTH, EQUAL, 6);
 
+                Element stock_info;
+                if (p.stock < 100) {
+                    stock_info =
+                        text("仅剩 " + std::to_string(p.stock) + " 件") |
+                        color(Color::RedLight);
+                } else {
+                    stock_info = text("库存充足") | color(Color::White);
+                }
                 // 构建右侧部分：详情信息
                 auto right_part =
                     vbox(
@@ -108,7 +127,7 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                          hbox({text(" " + p.product_name) | bold |
                                    size(WIDTH, GREATER_THAN, 15) |
                                    color(Color::White),
-                               filler(),
+                               stock_info, filler(),
                                text(Utils::format_price(p.price) + " 元") |
                                    color(Color::Gold1) | bold}),
 
@@ -147,7 +166,8 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
             SharedComponents::allow_scroll_action(page_container);
 
         auto final_container = Container::Tab(
-            {scroll_page_container, hint_popup}, (int *)&show_popup);
+            {scroll_page_container, hint_popup_for_qty, hint_popup_for_stock},
+            (int *)&show_popup);
 
         // 最终返回一个可滚动的页面
         this->component = Renderer(final_container, [=] {
@@ -179,18 +199,16 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                  }) | size(HEIGHT, EQUAL, 3)});
 
             if (show_popup == 1) {
-                auto popup_content =
-                    vbox({text("您还没有选择商品") | center, separator(),
-                          hint_popup->Render() | center |
-                              size(WIDTH, GREATER_THAN, 10)});
+                return SharedComponents::popup_with_button_element(
+                    hint_popup_for_qty, background, "您还没有选购任何商品");
+            }
 
-                auto popup_window = window(text("提示"), popup_content);
-                return dbox({background, popup_window |
-                                             size(WIDTH, GREATER_THAN, 40) |
-                                             size(HEIGHT, GREATER_THAN, 8) |
-                                             clear_under | center});
-            } else
-                return background;
+            if (show_popup == 2) {
+                return SharedComponents::popup_with_button_element(
+                    hint_popup_for_stock, background,
+                    "当前商品库存不足，请联系管理员进行添加");
+            }
+            return background;
         });
     } else {
         this->component = Renderer([] {

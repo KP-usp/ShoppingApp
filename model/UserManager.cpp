@@ -60,7 +60,7 @@ int UserManager::generate_and_update_id() {
 
 Result UserManager::check_login(const string &username,
                                 const string &input_password) {
-
+    // 这里 user  的状态已经是正常的
     optional<User> user_opt = get_user(username);
 
     if (user_opt.has_value()) {
@@ -68,8 +68,8 @@ Result UserManager::check_login(const string &username,
         if (check_password(input_password, string(user.password)) ==
             Result::SUCCESS) {
             active_user =
-                std::make_unique<User>(user.username, user.rolename,
-                                       user.password, user.id, user.status);
+                std::make_shared<User>(user.username, user.password,
+                                       user.is_admin, user.id, user.status);
             return Result::SUCCESS;
         }
     }
@@ -130,7 +130,7 @@ Result UserManager::check_register(const string &username,
     string hash_password = SecurityUtils::hash_password(password);
 
     // 添加加密密码的用户
-    User temp(username, hash_password, "user");
+    User temp(username, hash_password, false);
     append_user(temp);
 
     return Result::SUCCESS;
@@ -227,8 +227,7 @@ optional<User> UserManager::get_user(const string_view &username) {
             break;
 
         string_view found_username = temp.username;
-        if (username == found_username &&
-            temp.status == UserStatus::USER_NORMAL) {
+        if (username == found_username && temp.status == UserStatus::NORMAL) {
             return temp;
         }
     }
@@ -261,7 +260,7 @@ int UserManager::search_user(const string_view &keyword) {
         string_view current_username = temp.username;
         if (current_username.size() >= keyword.size() &&
             current_username.compare(0, keyword.size(), keyword) == 0 &&
-            temp.status == UserStatus::USER_NORMAL) {
+            temp.status == UserStatus::NORMAL) {
             count++;
         }
     }
@@ -290,7 +289,7 @@ FileErrorCode UserManager::delete_user(int id) {
     iofile.seekg(target_position.value());
     iofile.read(reinterpret_cast<char *>(&temp), sizeof(User));
 
-    if (temp.status == UserStatus::USER_NORMAL) {
+    if (temp.status == UserStatus::NORMAL) {
         mark_deleted(temp);
     } else {
         iofile.close();

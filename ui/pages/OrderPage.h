@@ -41,10 +41,11 @@ class OrderLayOut {
     OrderLayOut(AppContext &ctx, std::function<void()> on_checkout,
                 std::function<void()> on_shopping,
                 std::function<void()> on_history_orders_info,
-                std::function<void()> on_orders_update) {
+                std::function<void()> on_orders_update,
+                std::function<void()> on_orders_delete) {
 
         init_page(ctx, on_checkout, on_shopping, on_history_orders_info,
-                  on_orders_update);
+                  on_orders_update, on_orders_delete);
     }
 
     Component get_component() { return component; }
@@ -52,12 +53,14 @@ class OrderLayOut {
     void init_page(AppContext &ctx, std::function<void()> on_checkout,
                    std::function<void()> on_shopping,
                    std::function<void()> on_history_orders_info,
-                   std::function<void()> on_orders_update);
+                   std::function<void()> on_orders_update,
+                   std::function<void()> on_orders_delete);
 
     void refresh(AppContext &ctx, std::function<void()> on_checkout,
                  std::function<void()> on_shopping,
                  std::function<void()> on_history_orders_info,
-                 std::function<void()> on_orders_update) {
+                 std::function<void()> on_orders_update,
+                 std::function<void()> on_orders_delete) {
         component->DetachAllChildren();
         new_address = "";
         status_text = "";
@@ -65,6 +68,6 @@ class OrderLayOut {
         temp_selected_delivery_idx = 0;
 
         init_page(ctx, on_checkout, on_shopping, on_history_orders_info,
-                  on_orders_update);
+                  on_orders_update, on_orders_delete);
     }
 };

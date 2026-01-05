@@ -10,15 +10,8 @@
 #include <string>
 
 enum class UserStatus {
-    USER_NORMAL = 0,
-    USER_DELETED = -1,
-};
-
-struct Role {
-    static constexpr int ADMIN_NAME_SIZE = 5 + 1;
-    static constexpr int USER_NAME_SIZE = 4 + 1;
-    FixedString<ADMIN_NAME_SIZE> ADMIN = "admin";
-    FixedString<USER_NAME_SIZE> USER = "user";
+    NORMAL = 0,
+    DELETED = -1,
 };
 
 class User {
@@ -36,16 +29,16 @@ class User {
 
     FixedString<HASH_PASSWORD_SIZE> password;
 
-    FixedString<MAX_ROLENAME_SIZE> rolename;
+    bool is_admin;
 
     UserStatus status;
 
     User() {};
     User(const std::string_view &username, const std::string_view &password,
-         const std::string_view &rolename, const int user_id = -1,
-         const UserStatus status = UserStatus::USER_NORMAL)
+         const bool role_opt = false, const int user_id = -1,
+         const UserStatus status = UserStatus::NORMAL)
         : id(user_id), username(username), password(password),
-          rolename(rolename), status(status) {};
+          is_admin(role_opt), status(status) {};
 };
 
 class UserManager { // 管理用户类
@@ -61,7 +54,7 @@ class UserManager { // 管理用户类
     string m_db_filename;
 
     // 当前激活的用户
-    std::unique_ptr<User> active_user = nullptr;
+    std::shared_ptr<User> active_user = nullptr;
 
     // 初始化数据库，向数据库写入文件头（方便为用户生成 ID）
     void init_db_file();
@@ -76,7 +69,7 @@ class UserManager { // 管理用户类
     int get_id_by_username(const string_view &username); // ?
 
     // 添加删除标志
-    void mark_deleted(User &user) { user.status = UserStatus::USER_DELETED; }
+    void mark_deleted(User &user) { user.status = UserStatus::DELETED; }
 
     // 辅助函数：验证密码
     Result check_password(const string &input_password,
@@ -106,7 +99,7 @@ class UserManager { // 管理用户类
                           const string &again_password, string &error_message);
 
     // 获取当前登入的用户
-    User *get_current_user() { return active_user.get(); }
+    std::shared_ptr<User> get_current_user() { return active_user; }
 
     // 当前用户注销
     void logout() { active_user = nullptr; }

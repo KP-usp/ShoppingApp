@@ -1,4 +1,5 @@
 #pragma once
+#include "AdminPortal.h"
 #include "AppContext.h"
 #include "CartPage.h"
 #include "HistoryOrderPage.h"
@@ -26,7 +27,7 @@ class ShopAppUI {
     AppContext &ctx;
 
     int tab_index = 0; // 当显示第几个页面：0-登录 1-注册
-                       // 2-商城 3-购物车 4-订单
+                       // 2-商城 3-购物车 4-当前订单 5-历史订单 6-管理员门户
 
     // 页面类成员， 统一管理
     std::shared_ptr<LoginLayOut> login_layout;
@@ -35,15 +36,17 @@ class ShopAppUI {
     std::shared_ptr<CartLayOut> cart_layout;
     std::shared_ptr<OrderLayOut> order_layout;
     std::shared_ptr<HistoryOrderLayOut> history_order_layout;
+    std::shared_ptr<AdminPortal> admin_layout;
 
-    // 定义“外壳”，为了刷新商品页面
+    // 定义“外壳”
     Component shop_container_slot = Container::Vertical({});
 
-    // 定义“外壳”, 专门用来放购物车页面,订单页面, 或历史订单页面
+    // 定义“外壳”, 用来放购物车页面,订单页面, 或历史订单页面
     // UI(需要登录后初始化)
     Component cart_container_slot = Container::Vertical({});
     Component order_container_slot = Container::Vertical({});
     Component history_order_container_slot = Container::Vertical({});
+    Component admin_container_slot = Container::Vertical({});
 
     Component main_container; // 整个 App 的主容器
     Component tab_container;  // 页面切换容器
@@ -52,6 +55,16 @@ class ShopAppUI {
     std::atomic<bool> refresh_thread_running = false;
 
     // 全部的 lambda 回调函数
+
+    // 底层具体刷新页面的回调函数
+    std::function<void()> refresh_login_page;    // 刷新登录页
+    std::function<void()> refresh_register_page; // 刷新注册页
+    std::function<void()> refresh_shop_page;     // 刷新商品页（主要是库存）
+    std::function<void()> refresh_cart_page;     // 刷新购物车页
+    std::function<void()> refresh_order_page;    // 刷新订单页
+    std::function<void()> refresh_history_order_page; // 刷新历史订单页
+
+    // 页面逻辑相关的回调函数（使用底层回调、页面 Index 切换）
     std::function<void()> on_login;            // 前往登录页
     std::function<void()> on_login_success;    // 注册成功，返回登录页
     std::function<void()> on_register;         // 前往注册页
@@ -62,10 +75,12 @@ class ShopAppUI {
     std::function<void()> on_orders_info;      // 前往订单页
     std::function<void()> add_cart;            // 添加购物车商品时刷新 cart_page
     std::function<void()> delete_item_success; // 删除购物车商品刷新 cart_page
-    std::function<void()> checkout_success;    // 结账刷新 cart_page
+    std::function<void()> checkout_success; // 结账刷新  shop_page(更新库存)、
+                                            // cart_page 和 order_page
     std::function<void()> on_history_orders_info; // 前往历史订单页
-    std::function<void()> on_orders_update;       // 修改或删除订单
-
+    std::function<void()> on_orders_update;       // 修改订单刷新 orderpage
+    std::function<void()> on_orders_delete; //  删除订单刷新 shop_page(更新库存)
+                                            //  、order_page 和 history_page
   public:
     explicit ShopAppUI(AppContext &context);
 
@@ -77,40 +92,31 @@ class ShopAppUI {
         // 任何持有 ctx 的页面都可以通过调用 ctx.request_repaint() 来刷新屏幕
         ctx.request_repaint = [&screen] { screen.Post(Event::Custom); };
 
-        // 创建页面实例(cart_layout、order_layout、 history_order_layout
-        // 都需要登录后创建)
+        // 创建页面实例(shop_layout、 cart_layout、order_layout、
+        // history_order_layout 都需要登录后创建)
         login_layout =
             std::make_shared<LoginLayOut>(ctx, on_login_success, on_register);
         register_layout = std::make_shared<RegisterLayOut>(
             ctx, on_register_success, on_login);
-        shop_layout = std::make_shared<ShopLayOut>(ctx, on_checkout, add_cart);
-        shop_container_slot->Add(shop_layout->get_component());
 
         // 使用 Tab 容器进行路由管理
-        // 当 tab_index 变化时，显示的组件也会变化
-        // 这里 cart_component 开始时是 “空壳”
         auto tab_content = Container::Tab(
-            {
-                login_layout->get_component(),
-                register_layout->get_component(),
-                shop_container_slot,
-                cart_container_slot,
-                order_container_slot,
-                history_order_container_slot,
-            },
+            {login_layout->get_component(), register_layout->get_component(),
+             shop_container_slot, cart_container_slot, order_container_slot,
+             history_order_container_slot, admin_container_slot},
             &tab_index);
 
         // 注销组件(放在导航栏中)
         auto btn_logout = Button("注销", [this] { on_logout_success(); });
 
-        // 确保当前没用户时才激活注销组件
+        // 确保当前有用户时才激活注销组件
         auto logout_logic = Maybe(Container::Vertical({btn_logout}), [this] {
             return ctx.current_user != nullptr;
         });
 
         auto final_content = Container::Vertical({tab_content, logout_logic});
 
-        //  全局导航栏 - 只有登录后才显示
+        //  全局导航栏 (只有登录后才显示)
         auto layout = Renderer(final_content, [&] {
             Element page = tab_content->Render();
 
@@ -118,35 +124,69 @@ class ShopAppUI {
                 return page;
             }
 
-            auto header_content = hbox(
-                {text("  "),
+            // 通用元素
+            auto clock_element =
+                SharedComponents::get_clock_element() | color(Color::White);
+            auto user_element = text(ctx.current_user->username + "") | bold |
+                                color(Color::Gold1);
+            // 分支渲染
+            Element header;
 
-                 hbox({text("🛒 ") | size(WIDTH, EQUAL, 2),
-                       text("购物商城") | bold | color(Color::CyanLight)}) |
-                     vcenter | flex,
+            if (ctx.current_user->is_admin) {
+                // 管理员导航栏
+                auto admin_header_content = hbox(
+                    {text("  "),
+                     hbox({text("🛡️ ") | size(WIDTH, EQUAL, 2),
+                           text("系统管理后台") | bold |
+                               color(Color::RedLight)}) |
+                         vcenter | flex,
 
-                 hbox({filler(), text("🕒 ") | vcenter,
-                       SharedComponents::get_clock_element() |
-                           color(Color::White) | vcenter,
-                       filler()}) |
-                     flex,
+                     hbox({filler(), text("🕒 "), clock_element, filler()}) |
+                         vcenter | flex,
 
-                 hbox({filler(),
-                       text("Hi, ") | dim | color(Color::GrayLight) | vcenter,
-                       text(ctx.current_user->username + "") | bold |
-                           color(Color::Gold1) | vcenter,
-                       text("  ") | size(WIDTH, EQUAL, 2),
-                       separator() | color(Color::GrayDark),
-                       text("  ") | size(WIDTH, EQUAL, 1),
-                       logout_logic->Render()}) |
-                     flex,
+                     hbox({
+                         filler(), text("Admin: ") | vcenter | dim,
+                         user_element | vcenter, text("  "), separator(),
+                         text("  "),
+                         logout_logic->Render() // 注销按钮
+                     }) | flex,
+                     text("  ")});
 
-                 text("  ")});
+                header = vbox({
+                             admin_header_content,
+                             separator() |
+                                 color(Color::Red) // 管理员用红色分割线区分
+                         }) |
+                         bgcolor(Color::Grey11);
+            } else {
 
-            auto header =
-                vbox({header_content, separator() | color(Color::GrayDark)}) |
-                bgcolor(Color::Grey11);
+                // 普通用户导航栏
+                auto header_content = hbox(
+                    {text("  "),
 
+                     hbox({text("🛒 ") | size(WIDTH, EQUAL, 2),
+                           text("购物商城") | bold | color(Color::CyanLight)}) |
+                         vcenter | flex,
+
+                     hbox({filler(), text("🕒 ") | vcenter,
+                           clock_element | vcenter, filler()}) |
+                         flex,
+
+                     hbox({filler(),
+                           text("Hi, ") | dim | color(Color::GrayLight) |
+                               vcenter,
+                           user_element | vcenter,
+                           text("  ") | size(WIDTH, EQUAL, 2),
+                           separator() | color(Color::GrayDark),
+                           text("  ") | size(WIDTH, EQUAL, 1),
+                           logout_logic->Render()}) |
+                         flex,
+                     text("  ")});
+
+                header = vbox({header_content,
+                               separator() | color(Color::GrayDark)}) |
+                         bgcolor(Color::Grey11);
+            }
             return vbox({header, page | flex});
         });
 

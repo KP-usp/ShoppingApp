@@ -8,7 +8,8 @@
 void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                             std::function<void()> on_shopping,
                             std::function<void()> on_history_orders_info,
-                            std::function<void()> on_orders_update) {
+                            std::function<void()> on_orders_update,
+                            std::function<void()> on_orders_delete) {
 
     // 加载数据
     int user_id = (*(ctx.current_user)).id;
@@ -167,10 +168,11 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
         });
 
     // [Popup 6] 取消订单确认
-    auto btn_cancel_yes = Button("确定取消", [this, &ctx, on_orders_update] {
-        ctx.order_manager.cancel_order(temp_selected_order_id);
+    auto btn_cancel_yes = Button("确定取消", [this, &ctx, on_orders_delete] {
+        ctx.order_manager.cancel_order(temp_selected_order_id,
+                                       ctx.product_manager);
         show_popup = 0;
-        on_orders_update(); // 刷新页面
+        on_orders_delete(); // 刷新页面
     });
     auto btn_cancel_no = Button("再想想", [this] { show_popup = 0; });
 
