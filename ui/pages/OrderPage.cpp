@@ -358,16 +358,28 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
             // 没有订单的情况下
             order_container->Add(Renderer([] {
                 return vbox({text(""), text("目前没有正在进行的订单") | center,
-                             text("去商城逛逛吧！") | center |
-                                 color(Color::GrayLight)});
+                             text("去商城逛逛吧！") | center}) |
+                       color(Color::GrayLight);
             }));
 
             auto main_logic_container =
                 Container::Vertical({order_container, btn_container});
 
             this->component = Renderer(main_logic_container, [=] {
-                return vbox({text("我的订单 (进行中)") | bold | center | border,
-                             order_container->Render() | flex, separator(),
+                return vbox({// 标题栏
+                             vbox({
+                                 text(" ") | size(HEIGHT, EQUAL, 1),
+                                 text(" 当 前 订 单 ") | bold | center,
+                                 text(" —— 正 在 快 马 加 鞭 为 您 送 达 —— ") |
+                                     dim | center | color(Color::GrayLight),
+                                 text(" ") | size(HEIGHT, EQUAL, 1),
+                             }) | borderDouble |
+                                 color(Color::YellowLight),
+
+                             order_container->Render(),
+
+                             separatorHeavy(),
+
                              hbox({filler(), btn_to_cart->Render(), filler(),
                                    btn_to_shopping->Render(), filler(),
                                    btn_to_history->Render(), filler()})});
@@ -436,9 +448,9 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
 
         // 开始加载时没有订单的情况下
         order_container->Add(Renderer([] {
-            return vbox(
-                {text(""), text("目前没有正在进行的订单") | center,
-                 text("去商城逛逛吧！") | center | color(Color::GrayLight)});
+            return vbox({text(""), text("目前没有正在进行的订单") | center,
+                         text("去商城逛逛吧！") | center}) |
+                   color(Color::GrayLight);
         }));
 
         auto main_logic_container =
@@ -454,6 +466,10 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                              text(" ") | size(HEIGHT, EQUAL, 1),
                          }) | borderDouble |
                              color(Color::YellowLight),
+
+                         order_container->Render(),
+
+                         separatorHeavy(),
 
                          hbox({
                              filler(),

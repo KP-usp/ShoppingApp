@@ -12,6 +12,12 @@ class ShopLayOut {
     // 存储用户购买商品数量
     std::vector<int> quantities;
 
+    // 当前显示的商品列表
+    std::vector<Product> current_products;
+
+    // 搜索框的输入内容
+    std::string search_query;
+
     Component component;
 
     // 弹窗 index
@@ -29,6 +35,9 @@ class ShopLayOut {
     // 渲染页面的主逻辑
     void init_page(AppContext &ctx, std::function<void()> on_checkout,
                    std::function<void()> add_cart);
+
+    // 辅助函数：根据当前类成员 current_products 重建 UI 列表
+    void rebuild_product_list_ui(Component list_container);
 
     // 刷新页面
     void refresh(AppContext &ctx, std::function<void()> on_checkout,

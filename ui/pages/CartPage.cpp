@@ -85,23 +85,10 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
                     ctx.cart_manager.update_item(user_id, product_id, count,
                                                  CartItemStatus::NOT_ORDERED,
                                                  delivery_selections[i]);
-                    std::string path = "data/debug.log";
-                    std::ofstream outfile(path, std::ios_base::app);
-                    if (outfile.is_open()) {
-                        outfile << "cart_list 的 id : " << product_id
-                                << std::endl;
-                        outfile.close();
-                    }
 
                     auto p_opt = ctx.product_manager.get_product(product_id);
                     if (p_opt.has_value()) {
                         auto p = p_opt.value();
-                        std::ofstream outfile(path, std::ios_base::app);
-                        if (outfile.is_open()) {
-                            outfile << "结账商品的 id : " << p.product_id
-                                    << std::endl;
-                            outfile.close();
-                        }
 
                         ctx.product_manager.update_product(
                             p.product_name, p.product_id, p.price,

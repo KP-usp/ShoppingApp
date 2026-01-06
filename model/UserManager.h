@@ -68,9 +68,6 @@ class UserManager { // 管理用户类
     // 辅助函数: 根据用户对象的用户名获取 id
     int get_id_by_username(const string_view &username); // ?
 
-    // 添加删除标志
-    void mark_deleted(User &user) { user.status = UserStatus::DELETED; }
-
     // 辅助函数：验证密码
     Result check_password(const string &input_password,
                           const string &stored_password) {
@@ -124,6 +121,9 @@ class UserManager { // 管理用户类
 
     // 删除用户（使用删除标志）
     FileErrorCode delete_user(const int id);
+
+    // 恢复用户(删除 -> 正常)
+    FileErrorCode restore_user(const int id);
 
     // 析构器
     ~UserManager() {};

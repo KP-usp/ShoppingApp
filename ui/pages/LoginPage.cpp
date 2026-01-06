@@ -20,7 +20,8 @@ LoginLayOut::LoginLayOut(AppContext &ctx, std::function<void()> onLoginSuccess,
 
             onLoginSuccess();
         } else {
-            *message = "登入失败，用户名或密码错误";
+            *message =
+                "登录失败，用户名或密码错误, 如果忘记密码请联系管理员重置";
         }
     });
 

@@ -35,6 +35,7 @@ void UserManageLayOut::init_page(
     auto btn_save_edit = Button(
         "保存修改",
         [this, &ctx, list_container, back_dashboard, refresh_user_manage_page] {
+            // 这里默认是正常状态用户
             auto user_opt = ctx.user_manager.get_user_by_id(selected_user_id);
             if (!user_opt.has_value()) {
                 status_msg = "错误：找不到该用户";
@@ -94,23 +95,39 @@ void UserManageLayOut::init_page(
     auto del_container =
         Container::Horizontal({btn_confirm_del, btn_cancel_del});
 
+    // 恢复确认弹窗
+    auto btn_confirm_restore = Button(
+        "确认解封",
+        [this, &ctx, list_container, back_dashboard, refresh_user_manage_page] {
+            ctx.user_manager.restore_user(selected_user_id);
+            refresh_list(ctx, list_container, back_dashboard);
+            refresh_user_manage_page();
+            show_popup = 0;
+        },
+        ButtonOption::Animated(Color::Green));
+    auto btn_cancel_restore = Button("取消", [this] { show_popup = 0; });
+    auto restore_container =
+        Container::Horizontal({btn_confirm_restore, btn_cancel_restore});
+
     // 初始加载
     refresh_list(ctx, list_container, back_dashboard);
 
     // 布局组装
-    // 支持滚动
     auto scroller = SharedComponents::Scroller(list_container);
     auto main_logic_content = Container::Vertical({scroller, btn_back});
-    auto main_view = SharedComponents::allow_scroll_action(main_logic_content);
+    auto final_main_content = Container::Vertical(
+        {Container::Horizontal({search_input | flex, btn_search}),
+         main_logic_content});
 
-    auto final_main_layout = Container::Vertical(
-        {Container::Horizontal({search_input | flex, btn_search}), main_view});
+    auto final_main_layout =
+        SharedComponents::allow_scroll_action(final_main_content);
 
     auto tab_container = Container::Tab(
         {
             final_main_layout, // 0
             edit_container,    // 1
             del_container,     // 2
+            restore_container, // 3
         },
         &show_popup);
 
@@ -131,7 +148,8 @@ void UserManageLayOut::init_page(
                   // 搜索栏
                   hbox({text("🔍 ") | center,
                         search_input->Render() | borderRounded | flex,
-                        btn_search->Render()}),
+                        btn_search->Render()}) |
+                      size(HEIGHT, EQUAL, 3),
 
                   separator(),
 
@@ -147,8 +165,18 @@ void UserManageLayOut::init_page(
                       filler(),
                   })});
 
-        // 弹窗渲染
-        if (show_popup == 1) {
+        // 统一弹窗辅助函数
+        auto make_popup = [&](std::string title, Element content,
+                              Color border_c) {
+            return dbox(
+                {background,
+                 window(text(" " + title + " "),
+                        vbox({content | center, separator(),
+                              text(status_msg) | color(Color::Red) | center})) |
+                     size(WIDTH, GREATER_THAN, 50) | center | clear_under});
+        };
+
+        if (show_popup == 1) { // 编辑
             return dbox(
                 {background,
                  window(
@@ -164,17 +192,26 @@ void UserManageLayOut::init_page(
                            hbox({btn_save_edit->Render() | flex,
                                  btn_cancel_edit->Render() | flex})})) |
                      size(WIDTH, GREATER_THAN, 50) | center | clear_under});
-        } else if (show_popup == 2) {
-            return dbox(
-                {background,
-                 window(text(" 封禁账户警告 "),
-                        vbox({text("确定要封禁 ID: " +
-                                   std::to_string(selected_user_id) + " 吗？") |
-                                  center,
-                              text("该用户将无法再登录系统") |
-                                  color(Color::Red) | center,
-                              separator(), del_container->Render() | center})) |
-                     size(WIDTH, GREATER_THAN, 40) | center | clear_under});
+        } else if (show_popup == 2) { // 删除
+            return make_popup(
+                "封禁账户警告",
+                vbox({text("确定要封禁 ID: " +
+                           std::to_string(selected_user_id) + " 吗？") |
+                          center,
+                      text("该用户将无法再登录系统") | color(Color::Red) |
+                          center,
+                      separator(), del_container->Render() | center}),
+                Color::Red);
+        } else if (show_popup == 3) { //  恢复
+            return make_popup(
+                "解封账户",
+                vbox({text("确定要解封 ID: " +
+                           std::to_string(selected_user_id) + " 吗？") |
+                          center,
+                      text("用户将重新获得登录权限") | color(Color::Green) |
+                          center,
+                      separator(), restore_container->Render() | center}),
+                Color::Green);
         }
         return background;
     });
@@ -201,34 +238,58 @@ void UserManageLayOut::refresh_list(AppContext &ctx, Component list_container,
         std::string name(u.username);
         bool is_admin = u.is_admin;
 
+        // 获取用户状态
+        bool is_deleted = (u.status == UserStatus::DELETED);
+
         // 标记：防止操作自己
         bool is_self = (ctx.current_user && ctx.current_user->id == id);
 
-        auto btn_edit = Button(
-            "✎  设置",
-            [this, id, name, is_admin] {
-                selected_user_id = id;
-                selected_username_display = name;
-                edit_password = "";       // 重置密码框
-                edit_is_admin = is_admin; // 同步当前状态
-                status_msg = "";
-                show_popup = 1;
-            },
-            ButtonOption::Ascii());
+        Component btns_layout;
 
-        auto btn_del = Button(
-            "🚫 封禁",
-            [this, id, is_self] {
-                if (is_self) {
-                    return;
-                }
-                selected_user_id = id;
-                show_popup = 2;
-            },
-            is_self ? ButtonOption::Simple()
-                    : ButtonOption::Ascii()); // 自己不能点
+        if (!is_deleted) {
+            auto btn_edit = Button(
+                "✎  设置",
+                [this, id, name, is_admin] {
+                    selected_user_id = id;
+                    selected_username_display = name;
+                    edit_password = "";       // 重置密码框
+                    edit_is_admin = is_admin; // 同步当前状态
+                    status_msg = "";
+                    show_popup = 1;
+                },
+                ButtonOption::Ascii());
 
-        auto btns_layout = Container::Horizontal({btn_edit, btn_del});
+            auto btn_del = Button(
+                "🚫 封禁",
+                [this, id, is_self] {
+                    if (is_self) {
+                        return;
+                    }
+                    selected_user_id = id;
+                    show_popup = 2;
+                },
+                is_self ? ButtonOption::Simple()
+                        : ButtonOption::Ascii()); // 自己不能点
+
+            if (is_self) {
+                // 如果是自己，不放封禁按钮，避免手滑
+                btns_layout = Container::Horizontal({btn_edit});
+            } else {
+                btns_layout = Container::Horizontal({btn_edit, btn_del});
+            }
+
+        } else {
+            //  已封禁用户：显示 恢复
+            auto btn_restore = Button(
+                "🔓 解封",
+                [this, id] {
+                    selected_user_id = id;
+                    show_popup = 3;
+                },
+                ButtonOption::Ascii());
+
+            btns_layout = Container::Horizontal({btn_restore});
+        }
 
         auto card_renderer = Renderer(btns_layout, [=] {
             bool is_focused = btns_layout->Focused();
@@ -239,11 +300,19 @@ void UserManageLayOut::refresh_list(AppContext &ctx, Component list_container,
             Color bg_color = is_focused ? static_cast<Color>(Color::Grey11)
                                         : static_cast<Color>(Color::Default);
 
-            // 角色标识颜色
-            Color role_color = is_admin ? Color::RedLight : Color::GreenLight;
-            std::string role_text = is_admin ? "管理员" : "普通用户";
-            if (is_self)
-                role_text += " (您)";
+            // 角色/状态标识
+            Color role_color;
+            std::string role_text;
+
+            if (is_deleted) {
+                role_text = "已封禁";
+                role_color = Color::Red;
+            } else {
+                role_color = is_admin ? Color::RedLight : Color::GreenLight;
+                role_text = is_admin ? "管理员" : "普通用户";
+                if (is_self)
+                    role_text += " (您)";
+            }
 
             return hbox({// ID
                          vbox({text("ID") | dim | center,
@@ -262,14 +331,8 @@ void UserManageLayOut::refresh_list(AppContext &ctx, Component list_container,
                          separator(),
 
                          // 按钮
-                         vbox({btn_edit->Render() | size(WIDTH, EQUAL, 10),
-                               // 如果是自己，不渲染封禁按钮或者渲染为空白
-                               is_self ? text("")
-                                       : btn_del->Render() |
-                                             size(WIDTH, EQUAL, 10)}) |
-                             center
-
-                   }) |
+                         btns_layout->Render() | center |
+                             size(WIDTH, GREATER_THAN, 20)}) |
                    borderRounded | color(border_color) | bgcolor(bg_color);
         });
 

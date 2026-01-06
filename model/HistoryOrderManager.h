@@ -45,6 +45,10 @@ class HistoryOrderManager {
     // 加载属于该用户的历史订单（已完成 + 已取消）
     FileErrorCode load_history_orders(const int user_id,
                                       ProductManager &product_manager);
+    // 添加历史订单（订单快照）
+    FileErrorCode add_history_order(const int user_id,
+                                    std::vector<CartItem> cart_lists,
+                                    const std::string address);
 
     // 获取历史订单 Map 指针
     std::optional<std::map<long long, FullOrder> *> get_history_map_ptr() {

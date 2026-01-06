@@ -10,7 +10,6 @@
 
 // 商品状态：是否删除
 enum class ProductStatus {
-    OUT_OF_STOCK = -2,
     DELETED = -1,
     NORMAL = 0,
 };
@@ -55,22 +54,14 @@ class ProductManager {
     // 辅助函数：获取商品结构在文件中的位置
     std::optional<std::streampos> get_product_pos(const int product_id);
 
-    // 添加删除标志
-    void mark_deleted(Product &product) {
-        product.status = ProductStatus::DELETED;
-    }
-
-    // 检查商品的库存, 库存为 0 就更新商品状态
-    FileErrorCode check_stock();
-
   public:
     ProductManager(const string_view &db_filename)
         : m_db_filename(db_filename) {
         init_db_file();
     }
 
-    // 从数据库中导入商品信息
-    FileErrorCode load_product();
+    // 从数据库中导入所有商品信息(无论状态)
+    FileErrorCode load_all_product();
 
     // 获取从数据库中导入的商品列表
     std::optional<std::vector<Product> *> get_product_list_ptr() {
@@ -92,8 +83,15 @@ class ProductManager {
                                  const int product_id, const double new_price,
                                  const int stock);
 
-    // 根据 product_name 搜索商品信息(支持 ID 或 商品名模糊查找)
-    std::vector<Product> search_products(const std::string &query);
+    // 根据 product_name 或 ID 搜索所有商品信息(支持 ID
+    // 完全匹配或商品名模糊查找)
+    std::vector<Product> search_all_product(const std::string &query);
+
+    // 根据 product_name 搜索未删除商品信息（支持商品名模糊查找）
+    std::vector<Product> search_product(const std::string &name);
+
+    // 恢复数据库中商品的状态（删除 -> 正常）
+    FileErrorCode restore_product(const int product_id);
 
     // 根据商品 id 获取商品信息
     std::optional<Product> get_product(const int product_id);

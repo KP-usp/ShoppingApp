@@ -14,48 +14,6 @@ using std::optional;
 using std::string;
 using std::string_view;
 
-FileErrorCode ProductManager::check_stock() {
-    string path = Utils::get_database_path(m_db_filename);
-    std::fstream iofile(path, ios_base::in | ios_base::out | ios_base::binary);
-    if (!iofile.is_open()) {
-        cerr << "open " << path << "is failed." << endl;
-        return FileErrorCode::OpenFailure;
-    }
-
-    Product temp;
-
-    iofile.seekg(sizeof(FileHeader), ios_base::beg);
-
-    while (iofile.read(reinterpret_cast<char *>(&temp), sizeof(Product))) {
-        if (temp.stock == 0 && temp.status != ProductStatus::OUT_OF_STOCK) {
-            std::streampos next_read_pos = iofile.tellg();
-
-            std::streamoff offset =
-                -static_cast<std::streamoff>(sizeof(Product));
-
-            temp.status = ProductStatus::OUT_OF_STOCK;
-
-            // 清除 EOF 等可能的状态位
-            iofile.clear();
-
-            // 定位写指针到这条记录的开头
-            iofile.seekp(offset, std::ios::cur);
-
-            // 写入更新后的数据
-            iofile.write(reinterpret_cast<const char *>(&temp),
-                         sizeof(Product));
-
-            // 写入后刷新流，并重置读指针位置，准备下一次读取
-            iofile.flush();
-            iofile.seekg(next_read_pos);
-        }
-    }
-
-    iofile.close();
-
-    return FileErrorCode::OK;
-}
-
 void ProductManager::init_db_file() {
     string path = Utils::get_database_path(m_db_filename);
     ifstream infile(path, ios_base::binary);
@@ -97,12 +55,7 @@ int ProductManager::generate_and_update_id() {
     return new_id;
 }
 
-FileErrorCode ProductManager::load_product() {
-
-    // 先检查商品库存
-    if (check_stock() != FileErrorCode::OK) {
-        return FileErrorCode::OpenFailure;
-    }
+FileErrorCode ProductManager::load_all_product() {
     is_loaded = false;
 
     product_list.clear();
@@ -119,8 +72,7 @@ FileErrorCode ProductManager::load_product() {
     infile.seekg(sizeof(FileHeader), ios_base::beg);
 
     while (infile.read(reinterpret_cast<char *>(&temp), sizeof(Product))) {
-        if (temp.status != ProductStatus::DELETED)
-            product_list.emplace_back(temp);
+        product_list.emplace_back(temp);
     }
 
     infile.close();
@@ -178,7 +130,7 @@ FileErrorCode ProductManager::delete_product(const int product_id) {
     iofile.read(reinterpret_cast<char *>(&temp), sizeof(Product));
 
     if (temp.status == ProductStatus::NORMAL) {
-        mark_deleted(temp);
+        temp.status = ProductStatus::DELETED;
     } else {
         iofile.close();
         return FileErrorCode::NotFound;
@@ -235,21 +187,18 @@ ProductManager::update_product(const string_view &new_product_name,
     return FileErrorCode::OK;
 }
 
-std::vector<Product> ProductManager::search_products(const std::string &query) {
+std::vector<Product>
+ProductManager::search_all_product(const std::string &query) {
     std::vector<Product> result;
 
     // 确保数据已加载
     if (!is_loaded) {
-        load_product();
+        load_all_product();
     }
 
-    // 如果查询为空，返回所有未删除的商品
+    // 如果查询为空，返回所有商品
     if (query.empty()) {
-        for (const auto &p : product_list) {
-            if (p.status != ProductStatus::DELETED) {
-                result.push_back(p);
-            }
-        }
+        result = product_list;
         return result;
     }
 
@@ -259,8 +208,6 @@ std::vector<Product> ProductManager::search_products(const std::string &query) {
                    ::tolower);
 
     for (const auto &p : product_list) {
-        if (p.status == ProductStatus::DELETED)
-            continue;
 
         // 检查 ID (将 ID 转字符串匹配)
         std::string id_str = std::to_string(p.product_id);
@@ -279,10 +226,86 @@ std::vector<Product> ProductManager::search_products(const std::string &query) {
     return result;
 }
 
+std::vector<Product>
+ProductManager::search_product(const std::string &query_name) {
+    std::vector<Product> result;
+
+    // 确保数据已加载
+    if (!is_loaded) {
+        load_all_product();
+    }
+
+    // 如果查询为空，返回所有未删除的商品
+    if (query_name.empty()) {
+        for (const auto &p : product_list) {
+            if (p.status != ProductStatus::DELETED)
+                result.emplace_back(p);
+        }
+        return result;
+    }
+
+    // 转换为小写以进行不区分大小写的搜索
+    std::string lower_query = query_name;
+    std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(),
+                   ::tolower);
+
+    for (const auto &p : product_list) {
+        if (p.status == ProductStatus::DELETED)
+            continue;
+
+        // 检查 ID (将 ID 转字符串匹配)
+        std::string id_str = std::to_string(p.product_id);
+
+        // 检查名称 (转小写匹配)
+        std::string name_str = std::string(p.product_name);
+        std::transform(name_str.begin(), name_str.end(), name_str.begin(),
+                       ::tolower);
+
+        // 如果 ID 等于查询串或名称包含查询串
+        if (id_str == query_name ||
+            name_str.find(lower_query) != std::string::npos) {
+            result.push_back(p);
+        }
+    }
+    return result;
+}
+
+FileErrorCode ProductManager::restore_product(const int product_id) {
+    string path = Utils::get_database_path(m_db_filename);
+    std::fstream iofile(path, ios_base::in | ios_base::out | ios_base::binary);
+    if (!iofile.is_open()) {
+        cerr << "open " << path << "is failed." << endl;
+        return FileErrorCode::OpenFailure;
+    }
+
+    optional<std::streampos> target_position = get_product_pos(product_id);
+    if (!target_position.has_value()) {
+        iofile.close();
+        return FileErrorCode::NotFound;
+    }
+
+    Product temp;
+
+    iofile.seekg(target_position.value());
+    iofile.read(reinterpret_cast<char *>(&temp), sizeof(Product));
+
+    if (temp.status == ProductStatus::DELETED) {
+        temp.status = ProductStatus::NORMAL;
+    } else {
+        iofile.close();
+        return FileErrorCode::NotFound;
+    }
+    iofile.seekp(target_position.value());
+
+    iofile.write(reinterpret_cast<const char *>(&temp), sizeof(Product));
+
+    iofile.close();
+
+    return FileErrorCode::OK;
+}
+
 std::optional<Product> ProductManager::get_product(const int product_id) {
     string path = Utils::get_database_path(m_db_filename);
-
-    std::string path1 = "data/debug.log";
 
     ifstream infile(path, ios_base::binary);
     if (!infile.is_open()) {

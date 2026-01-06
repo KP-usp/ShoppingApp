@@ -315,8 +315,6 @@ std::vector<User> UserManager::search_users_list(const string &query) {
     infile.seekg(sizeof(FileHeader), ios_base::beg);
 
     while (infile.read(reinterpret_cast<char *>(&temp), sizeof(User))) {
-        if (temp.status == UserStatus::DELETED)
-            continue;
 
         if (query.empty()) {
             result.push_back(temp);
@@ -346,30 +344,17 @@ FileErrorCode UserManager::delete_user(const int id) {
 
     User temp;
 
-    std::string path1 = "data/debug.log";
-
-    std::ofstream outfile1(path1, std::ios_base::app);
-    if (outfile1.is_open()) {
-        outfile1 << "id:" << id << std::endl;
-        outfile1.close();
-    }
-
     optional<streampos> target_position = get_user_pos(id);
     if (!target_position.has_value()) {
         iofile.close();
         return FileErrorCode::NotFound;
     }
 
-    std::ofstream outfile2(path1, std::ios_base::app);
-    if (outfile2.is_open()) {
-        outfile2 << "找到了位置" << std::endl;
-        outfile2.close();
-    }
     iofile.seekg(target_position.value());
     iofile.read(reinterpret_cast<char *>(&temp), sizeof(User));
 
     if (temp.status == UserStatus::NORMAL) {
-        mark_deleted(temp);
+        temp.status = UserStatus::DELETED;
     } else {
         iofile.close();
         return FileErrorCode::NotFound;
@@ -378,6 +363,39 @@ FileErrorCode UserManager::delete_user(const int id) {
 
     iofile.write(reinterpret_cast<const char *>(&temp), sizeof(User));
 
+    iofile.close();
+
+    return FileErrorCode::OK;
+}
+
+FileErrorCode UserManager::restore_user(const int id) {
+    string path = Utils::get_database_path(m_db_filename);
+    std::fstream iofile(path, ios_base::in | ios_base::out | ios_base::binary);
+    if (!iofile.is_open()) {
+        cerr << "open " << path << "is failed." << endl;
+        return FileErrorCode::OpenFailure;
+    }
+
+    optional<streampos> target_position = get_user_pos(id);
+    if (!target_position.has_value()) {
+        iofile.close();
+        return FileErrorCode::NotFound;
+    }
+
+    User temp;
+    iofile.seekg(target_position.value());
+    iofile.read(reinterpret_cast<char *>(&temp), sizeof(User));
+
+    // 只有状态为 DELETED 才恢复
+    if (temp.status == UserStatus::DELETED) {
+        temp.status = UserStatus::NORMAL;
+    } else {
+        iofile.close();
+        return FileErrorCode::NotFound;
+    }
+
+    iofile.seekp(target_position.value());
+    iofile.write(reinterpret_cast<const char *>(&temp), sizeof(User));
     iofile.close();
 
     return FileErrorCode::OK;
@@ -402,14 +420,6 @@ optional<std::streampos> UserManager::get_user_pos(const int id) {
     while (infile.read(reinterpret_cast<char *>(&temp), sizeof(User))) {
 
         if (temp.id == id) {
-            std::string path = "data/debug.log";
-
-            std::ofstream outfile(path, std::ios_base::app);
-            if (outfile.is_open()) {
-                outfile << "找到位置了" << std::endl;
-                outfile.close();
-            }
-
             return record_start_pos;
         }
 
