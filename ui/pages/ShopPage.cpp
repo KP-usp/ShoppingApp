@@ -113,13 +113,17 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                     size(WIDTH, EQUAL, 6);
 
                 Element stock_info;
-                if (p.stock < 100) {
+                if (p.stock < 50 && p.stock > 0) {
                     stock_info =
                         text("仅剩 " + std::to_string(p.stock) + " 件") |
                         color(Color::RedLight);
+                } else if (p.stock <= 0) {
+                    stock_info =
+                        text("货源短缺，等待补充中") | color(Color::White);
                 } else {
-                    stock_info = text("库存充足") | color(Color::White);
+                    stock_info = text("库存充足") | color(Color::YellowLight);
                 }
+
                 // 构建右侧部分：详情信息
                 auto right_part =
                     vbox(

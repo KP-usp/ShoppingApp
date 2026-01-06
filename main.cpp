@@ -36,7 +36,7 @@ int main() {
 
     ShopAppUI my_app(ctx);
 
-    // 注释块，方便调试
+    // // 注释块，方便调试
     // auto hash_password1 = SecurityUtils::hash_password(password1);
     // User user(username1, hash_password1, is_admin1);
     // auto hash_password = SecurityUtils::hash_password(password);

@@ -103,13 +103,6 @@ FileErrorCode ProductManager::load_product() {
     if (check_stock() != FileErrorCode::OK) {
         return FileErrorCode::OpenFailure;
     }
-    std::string path1 = "data/debug.log";
-    std::ofstream outfile1(path1, std::ios_base::app);
-    if (outfile1.is_open()) {
-        outfile1 << "check 成功了" << std::endl;
-        outfile1.close();
-    }
-
     is_loaded = false;
 
     product_list.clear();
@@ -126,14 +119,8 @@ FileErrorCode ProductManager::load_product() {
     infile.seekg(sizeof(FileHeader), ios_base::beg);
 
     while (infile.read(reinterpret_cast<char *>(&temp), sizeof(Product))) {
-        std::string path1 = "data/debug.log";
-        std::ofstream outfile1(path1, std::ios_base::app);
-        if (outfile1.is_open()) {
-            outfile1 << temp.product_id << std::endl;
-            outfile1.close();
-        }
-
-        product_list.emplace_back(temp);
+        if (temp.status != ProductStatus::DELETED)
+            product_list.emplace_back(temp);
     }
 
     infile.close();
@@ -248,6 +235,50 @@ ProductManager::update_product(const string_view &new_product_name,
     return FileErrorCode::OK;
 }
 
+std::vector<Product> ProductManager::search_products(const std::string &query) {
+    std::vector<Product> result;
+
+    // 确保数据已加载
+    if (!is_loaded) {
+        load_product();
+    }
+
+    // 如果查询为空，返回所有未删除的商品
+    if (query.empty()) {
+        for (const auto &p : product_list) {
+            if (p.status != ProductStatus::DELETED) {
+                result.push_back(p);
+            }
+        }
+        return result;
+    }
+
+    // 转换为小写以进行不区分大小写的搜索
+    std::string lower_query = query;
+    std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(),
+                   ::tolower);
+
+    for (const auto &p : product_list) {
+        if (p.status == ProductStatus::DELETED)
+            continue;
+
+        // 检查 ID (将 ID 转字符串匹配)
+        std::string id_str = std::to_string(p.product_id);
+
+        // 检查名称 (转小写匹配)
+        std::string name_str = std::string(p.product_name);
+        std::transform(name_str.begin(), name_str.end(), name_str.begin(),
+                       ::tolower);
+
+        // 如果 ID 等于查询串或名称包含查询串
+        if (id_str == query ||
+            name_str.find(lower_query) != std::string::npos) {
+            result.push_back(p);
+        }
+    }
+    return result;
+}
+
 std::optional<Product> ProductManager::get_product(const int product_id) {
     string path = Utils::get_database_path(m_db_filename);
 
@@ -286,7 +317,7 @@ ProductManager::get_id_by_name(const string_view &product_name) {
     if (!infile.is_open()) {
 
         cerr << "open " << path << "is failed." << endl;
-        return nullopt; // 表示
+        return nullopt;
     }
 
     Product temp;

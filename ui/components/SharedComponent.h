@@ -84,8 +84,8 @@ inline Element popup_with_button_element(Component button, Element background,
 
     auto popup_window = window(text("提示"), popup_content);
     return dbox({background, popup_window | size(WIDTH, GREATER_THAN, 40) |
-                                 size(HEIGHT, GREATER_THAN, 8) | clear_under |
-                                 center});
+                                 size(HEIGHT, GREATER_THAN, 8) | center |
+                                 clear_under});
 }
 
 }; // namespace SharedComponents

@@ -25,10 +25,11 @@ class AdminPortal {
     Component tab_container; // 页面切换逻辑
 
     // 定义全部回调函数
-    std::function<void()> back_dashboard;      // 回到仪表盘
-    std::function<void()> on_inventory_page;   // 前往商品管理
-    std::function<void()> on_user_manage_page; // 前往用户管理
-
+    std::function<void()> back_dashboard;           // 回到仪表盘
+    std::function<void()> on_inventory_page;        // 前往商品管理
+    std::function<void()> on_user_manage_page;      // 前往用户管理
+    std::function<void()> refresh_inventory_page;   // 刷新商品管理页
+    std::function<void()> refresh_user_manage_page; // 刷新用户管理页
   public:
     explicit AdminPortal(AppContext &context);
 

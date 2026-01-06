@@ -29,7 +29,7 @@ void UserManager::init_db_file() {
         FileHeader header;
         header.next_id = 1;
         outfile.write(reinterpret_cast<const char *>(&header),
-                      sizeof(FileHeader::next_id));
+                      sizeof(FileHeader));
         outfile.close();
     }
 }
@@ -61,7 +61,7 @@ int UserManager::generate_and_update_id() {
 Result UserManager::check_login(const string &username,
                                 const string &input_password) {
     // 这里 user  的状态已经是正常的
-    optional<User> user_opt = get_user(username);
+    optional<User> user_opt = get_user_by_name(username);
 
     if (user_opt.has_value()) {
         User user = user_opt.value();
@@ -117,7 +117,7 @@ Result UserManager::check_register(const string &username,
     if (is_valid_username_format(username, error_message) == Result::FAILURE ||
         is_valid_password_format(password, error_message) == Result::FAILURE)
         return Result::FAILURE;
-    if (get_user(username).has_value()) {
+    if (get_user_by_name(username).has_value()) {
         error_message = "用户名已存在";
         return Result::FAILURE;
     }
@@ -146,6 +146,14 @@ FileErrorCode UserManager::append_user(const User &new_user) {
     user_to_save.id = new_id;
 
     string path = Utils::get_database_path(m_db_filename);
+
+    std::string path1 = "data/debug.log";
+
+    std::ofstream outfile1(path1, std::ios_base::app);
+    if (outfile1.is_open()) {
+        outfile1 << "用户 ID：" << user_to_save.id << std::endl;
+        outfile1.close();
+    }
 
     //  将用户写入文件末尾
     ofstream outfile(path, ios_base::binary | ios_base::app);
@@ -203,7 +211,7 @@ FileErrorCode UserManager::update_user(const User &new_user) {
     return FileErrorCode::OK;
 }
 
-optional<User> UserManager::get_user(const string_view &username) {
+optional<User> UserManager::get_user_by_name(const string_view &username) {
 
     string path = Utils::get_database_path(m_db_filename);
 
@@ -216,18 +224,37 @@ optional<User> UserManager::get_user(const string_view &username) {
 
     User temp;
 
-    infile.seekg(sizeof(FileHeader::next_id), ios_base::beg);
+    infile.seekg(sizeof(FileHeader), ios_base::beg);
 
-    while (true) {
-        streampos current_pos = infile.tellg();
-
-        infile.read(reinterpret_cast<char *>(&temp), sizeof(User));
-
-        if (!infile)
-            break;
-
+    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(User))) {
         string_view found_username = temp.username;
         if (username == found_username && temp.status == UserStatus::NORMAL) {
+            return temp;
+        }
+    }
+
+    infile.close();
+
+    return nullopt;
+}
+
+std::optional<User> UserManager::get_user_by_id(const int user_id) {
+    string path = Utils::get_database_path(m_db_filename);
+
+    ifstream infile(path, ios_base::binary);
+    if (!infile.is_open()) {
+
+        cerr << "open " << path << "is failed." << endl;
+        return nullopt;
+    }
+
+    User temp;
+
+    infile.seekg(sizeof(FileHeader), ios_base::beg);
+
+    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(User))) {
+
+        if (user_id == temp.id && temp.status == UserStatus::NORMAL) {
             return temp;
         }
     }
@@ -253,7 +280,7 @@ int UserManager::search_user(const string_view &keyword) {
 
     User temp;
 
-    infile.seekg(sizeof(FileHeader::next_id), ios_base::beg);
+    infile.seekg(sizeof(FileHeader), ios_base::beg);
 
     while (infile.read(reinterpret_cast<char *>(&temp), sizeof(User))) {
 
@@ -270,7 +297,45 @@ int UserManager::search_user(const string_view &keyword) {
     return count;
 }
 
-FileErrorCode UserManager::delete_user(int id) {
+std::vector<User> UserManager::search_users_list(const string &query) {
+    std::vector<User> result;
+
+    string path = Utils::get_database_path(m_db_filename);
+    ifstream infile(path, ios_base::binary);
+    if (!infile.is_open()) {
+        return result;
+    }
+
+    User temp;
+
+    string low_query = query;
+
+    std::transform(low_query.begin(), low_query.end(), low_query.begin(),
+                   ::tolower);
+    infile.seekg(sizeof(FileHeader), ios_base::beg);
+
+    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(User))) {
+        if (temp.status == UserStatus::DELETED)
+            continue;
+
+        if (query.empty()) {
+            result.push_back(temp);
+            continue;
+        }
+
+        string user_id_str = std::to_string(temp.id);
+        string username_str = string(temp.username);
+
+        if (user_id_str == query || username_str.find(query))
+            result.push_back(temp);
+    }
+
+    infile.close();
+
+    return result;
+}
+
+FileErrorCode UserManager::delete_user(const int id) {
 
     string path = Utils::get_database_path(m_db_filename);
     std::fstream iofile(path, ios_base::in | ios_base::out | ios_base::binary);
@@ -281,10 +346,24 @@ FileErrorCode UserManager::delete_user(int id) {
 
     User temp;
 
-    optional<streampos> target_position = get_user_pos(temp.id);
+    std::string path1 = "data/debug.log";
+
+    std::ofstream outfile1(path1, std::ios_base::app);
+    if (outfile1.is_open()) {
+        outfile1 << "id:" << id << std::endl;
+        outfile1.close();
+    }
+
+    optional<streampos> target_position = get_user_pos(id);
     if (!target_position.has_value()) {
         iofile.close();
         return FileErrorCode::NotFound;
+    }
+
+    std::ofstream outfile2(path1, std::ios_base::app);
+    if (outfile2.is_open()) {
+        outfile2 << "找到了位置" << std::endl;
+        outfile2.close();
     }
     iofile.seekg(target_position.value());
     iofile.read(reinterpret_cast<char *>(&temp), sizeof(User));
@@ -304,7 +383,7 @@ FileErrorCode UserManager::delete_user(int id) {
     return FileErrorCode::OK;
 }
 
-optional<std::streampos> UserManager::get_user_pos(int id) {
+optional<std::streampos> UserManager::get_user_pos(const int id) {
 
     string path = Utils::get_database_path(m_db_filename);
     ifstream infile(path, ios_base::binary);
@@ -316,19 +395,25 @@ optional<std::streampos> UserManager::get_user_pos(int id) {
 
     User temp;
 
-    infile.seekg(sizeof(FileHeader::next_id), ios_base::beg);
+    infile.seekg(sizeof(FileHeader), ios_base::beg);
 
-    while (true) {
-        streampos current_pos = infile.tellg();
+    streampos record_start_pos = infile.tellg();
 
-        infile.read(reinterpret_cast<char *>(&temp), sizeof(User));
-
-        if (!infile)
-            break;
+    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(User))) {
 
         if (temp.id == id) {
-            return current_pos;
+            std::string path = "data/debug.log";
+
+            std::ofstream outfile(path, std::ios_base::app);
+            if (outfile.is_open()) {
+                outfile << "找到位置了" << std::endl;
+                outfile.close();
+            }
+
+            return record_start_pos;
         }
+
+        record_start_pos = infile.tellg();
     }
 
     infile.close();
@@ -351,7 +436,7 @@ int UserManager::get_id_by_username(const string_view &username) {
 
     User temp;
 
-    infile.seekg(sizeof(FileHeader::next_id), ios_base::beg);
+    infile.seekg(sizeof(FileHeader), ios_base::beg);
 
     while (true) {
         streampos current_pos = infile.tellg();

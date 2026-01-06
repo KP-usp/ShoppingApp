@@ -63,7 +63,7 @@ class UserManager { // 管理用户类
     int generate_and_update_id();
 
     // 辅助函数：查询用户对象块在数据库文件中的位置
-    std::optional<streampos> get_user_pos(int id);
+    std::optional<streampos> get_user_pos(const int id);
 
     // 辅助函数: 根据用户对象的用户名获取 id
     int get_id_by_username(const string_view &username); // ?
@@ -111,13 +111,19 @@ class UserManager { // 管理用户类
     FileErrorCode update_user(const User &new_user);
 
     // 查找单个用户并返回
-    std::optional<User> get_user(const string_view &username);
+    std::optional<User> get_user_by_name(const string_view &username);
+
+    // 根据用户 ID 查找用户
+    std::optional<User> get_user_by_id(const int user_id);
 
     // 用户模糊检索
     int search_user(const string_view &username);
 
+    // 用于关键词匹配用户（支持 ID 精确查找和用户名模糊查找）
+    std::vector<User> search_users_list(const string &query);
+
     // 删除用户（使用删除标志）
-    FileErrorCode delete_user(int id);
+    FileErrorCode delete_user(const int id);
 
     // 析构器
     ~UserManager() {};

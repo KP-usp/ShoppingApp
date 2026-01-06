@@ -92,6 +92,9 @@ class ProductManager {
                                  const int product_id, const double new_price,
                                  const int stock);
 
+    // 根据 product_name 搜索商品信息(支持 ID 或 商品名模糊查找)
+    std::vector<Product> search_products(const std::string &query);
+
     // 根据商品 id 获取商品信息
     std::optional<Product> get_product(const int product_id);
 
