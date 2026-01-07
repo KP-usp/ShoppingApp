@@ -1,12 +1,12 @@
-#include "SecurityUtils.h"
+#ifdef _WIN32
+system("chcp 65001");
+#endif
+
 #include "ShopAppUI.h"
-#include <iostream>
 #include <string>
 #include <string_view>
 #include <vector>
 
-using std::cout;
-using std::endl;
 using std::string;
 using std::string_view;
 using std::vector;

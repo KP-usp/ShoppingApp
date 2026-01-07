@@ -7,4 +7,4 @@ compile_commands.json
 
 ./debug_template.txt
 
-./data/debug.log
+data/debug.log
