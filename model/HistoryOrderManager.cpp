@@ -3,8 +3,6 @@
 #include <iostream>
 #include <vector>
 
-using std::cerr;
-using std::endl;
 using std::fstream;
 using std::ifstream;
 using std::ios_base;
@@ -15,25 +13,26 @@ using std::string;
 FileErrorCode
 HistoryOrderManager::update_status_in_file(long long order_id,
                                            FullOrderStatus new_status) {
-    string path = Utils::get_database_path(m_order_db_filename);
+    string path = Utils::get_database_path(m_db_filename);
     fstream iofile(path, ios_base::binary | ios_base::in | ios_base::out);
 
     if (!iofile.is_open())
         return FileErrorCode::OpenFailure;
 
-    OrderItem temp;
+    HistoryOrderItem temp;
     bool found = false;
 
-    while (iofile.read(reinterpret_cast<char *>(&temp), sizeof(OrderItem))) {
+    while (iofile.read(reinterpret_cast<char *>(&temp),
+                       sizeof(HistoryOrderItem))) {
         // 找到对应订单ID，且状态不一致时才写入
         if (temp.order_id == order_id && temp.status != new_status) {
             temp.status = new_status;
 
             // 回退写指针
-            long write_pos = (long)iofile.tellg() - sizeof(OrderItem);
+            long write_pos = (long)iofile.tellg() - sizeof(HistoryOrderItem);
             iofile.seekp(write_pos);
             iofile.write(reinterpret_cast<const char *>(&temp),
-                         sizeof(OrderItem));
+                         sizeof(HistoryOrderItem));
 
             iofile.seekg(iofile.tellp());
             found = true;
@@ -43,18 +42,92 @@ HistoryOrderManager::update_status_in_file(long long order_id,
     return found ? FileErrorCode::OK : FileErrorCode::NotFound;
 }
 
+FileErrorCode
+HistoryOrderManager::cancel_history_order(const long long order_id,
+                                          ProductManager &product_manager) {
+    // 仅更新状态
+    return update_history_order_in_file(order_id, FullOrderStatus::CANCEL,
+                                        std::nullopt, std::nullopt);
+}
+
+FileErrorCode HistoryOrderManager::update_history_order_info(
+    const long long order_id, const std::string &new_address,
+    const int new_delivery_selection) {
+    // "" 表示不修改地址
+    if (new_address.empty()) {
+        return update_history_order_in_file(
+            order_id, std::nullopt, std::nullopt, new_delivery_selection);
+    }
+    // -1 表示不修改送达方式
+    if (new_delivery_selection == -1) {
+        return update_history_order_in_file(order_id, std::nullopt, new_address,
+                                            std::nullopt);
+    }
+
+    // 更新地址和配送方式，保持状态不变
+    return update_history_order_in_file(order_id, std::nullopt, new_address,
+                                        new_delivery_selection);
+}
+
+FileErrorCode HistoryOrderManager::update_history_order_in_file(
+    const long long order_id, std::optional<FullOrderStatus> new_status,
+    std::optional<std::string> new_address, std::optional<int> new_delivery) {
+
+    string path = Utils::get_database_path(m_db_filename);
+    std::fstream iofile(path, ios_base::binary | ios_base::in | ios_base::out);
+
+    if (!iofile.is_open()) {
+        return FileErrorCode::OpenFailure;
+    }
+
+    HistoryOrderItem temp;
+    bool found = false;
+
+    // 遍历整个文件，查找所有匹配 order_id 的记录
+    while (iofile.read(reinterpret_cast<char *>(&temp),
+                       sizeof(HistoryOrderItem))) {
+        if (temp.order_id == order_id) {
+            found = true;
+
+            // 修改需要更新的字段
+            if (new_status.has_value()) {
+                temp.status = new_status.value();
+            }
+            if (new_address.has_value()) {
+                temp.address = new_address.value();
+            }
+            if (new_delivery.has_value()) {
+                temp.delivery_selection = new_delivery.value();
+            }
+
+            // 回退写指针
+            long write_pos = (long)iofile.tellg() - sizeof(HistoryOrderItem);
+            iofile.seekp(write_pos);
+
+            iofile.write(reinterpret_cast<const char *>(&temp),
+                         sizeof(HistoryOrderItem));
+
+            iofile.seekg(iofile.tellp());
+        }
+    }
+
+    iofile.close();
+    return found ? FileErrorCode::OK : FileErrorCode::NotFound;
+}
+
 void HistoryOrderManager::check_and_update_arrived_orders(int user_id) {
-    string path = Utils::get_database_path(m_order_db_filename);
+    string path = Utils::get_database_path(m_db_filename);
     ifstream infile(path, std::ios_base::binary);
     if (!infile.is_open())
         return;
 
-    OrderItem temp;
+    HistoryOrderItem temp;
     time_t now = get_current_time();
     std::vector<long long> orders_to_complete;
 
     // 遍历寻找需要自动收货的订单ID
-    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(OrderItem))) {
+    while (infile.read(reinterpret_cast<char *>(&temp),
+                       sizeof(HistoryOrderItem))) {
         if (temp.id == user_id &&
             temp.status == FullOrderStatus::NOT_COMPLETED) {
 
@@ -101,25 +174,24 @@ HistoryOrderManager::load_history_orders(const int user_id,
     history_orders_map.clear();
     is_loaded = false;
 
-    string path = Utils::get_database_path(m_order_db_filename);
+    string path = Utils::get_database_path(m_db_filename);
     ifstream infile(path, std::ios_base::binary);
     if (!infile.is_open()) {
         return FileErrorCode::OpenFailure;
     }
 
-    OrderItem temp;
-    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(OrderItem))) {
+    HistoryOrderItem temp;
+    while (infile.read(reinterpret_cast<char *>(&temp),
+                       sizeof(HistoryOrderItem))) {
         if (temp.id == user_id) {
 
             // 只处理已完成或已取消的订单
             if (temp.status == FullOrderStatus::COMPLETED ||
                 temp.status == FullOrderStatus::CANCEL) {
-                FullOrder &order = history_orders_map[temp.order_id];
+                HistoryFullOrder &order = history_orders_map[temp.order_id];
 
                 // 计算商品总价
-                double item_price =
-                    product_manager.get_price_by_id(temp.product_id);
-                order.total_price += temp.count * item_price;
+                order.total_price += temp.count * temp.price;
 
                 // 初始化头部信息
                 if (order.items.empty()) {
@@ -141,5 +213,41 @@ HistoryOrderManager::load_history_orders(const int user_id,
 
     infile.close();
     is_loaded = true;
+    return FileErrorCode::OK;
+}
+
+FileErrorCode HistoryOrderManager::add_history_order(
+    const int user_id, ProductManager &product_manager,
+    std::vector<CartItem> cart_lists, const std::string address) {
+
+    time_t time = get_current_time();
+    std::vector<HistoryOrderItem> history_order_list;
+
+    // 添加订单的默认初始状态是 NOT_COMPLETED
+    for (const auto &item : cart_lists) {
+        if (!product_manager.get_product(item.product_id).has_value())
+            return FileErrorCode::NotFound;
+        auto p = product_manager.get_product(item.product_id).value();
+        auto name = string(p.product_name);
+        int price = p.price;
+
+        HistoryOrderItem new_order(item.id, name, price, item.count, time,
+                                   item.delivery_selection, address,
+                                   FullOrderStatus::NOT_COMPLETED);
+        history_order_list.push_back(new_order);
+    }
+
+    string path = Utils::get_database_path(m_db_filename);
+
+    ofstream outfile(path, ios_base::binary | ios_base::app);
+    if (!outfile.is_open()) {
+        return FileErrorCode::OpenFailure;
+    }
+    for (const auto &history_order : history_order_list) {
+        outfile.write(reinterpret_cast<const char *>(&history_order),
+                      sizeof(HistoryOrderItem));
+    }
+    outfile.close();
+
     return FileErrorCode::OK;
 }

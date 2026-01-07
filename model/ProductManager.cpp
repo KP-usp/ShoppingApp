@@ -230,10 +230,9 @@ std::vector<Product>
 ProductManager::search_product(const std::string &query_name) {
     std::vector<Product> result;
 
-    // 确保数据已加载
-    if (!is_loaded) {
-        load_all_product();
-    }
+    // 由于可能库存更新所以这里需要重新从数据库加载
+    product_list.clear();
+    load_all_product();
 
     // 如果查询为空，返回所有未删除的商品
     if (query_name.empty()) {

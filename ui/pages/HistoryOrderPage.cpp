@@ -47,11 +47,12 @@ void HistoryOrderLayOut::init_page(AppContext &ctx,
                     return text("数据已更新，请刷新") | color(Color::Red);
                 }
 
-                FullOrder &full_order = map_ptr->at(order_id);
+                HistoryFullOrder &history_full_order = map_ptr->at(order_id);
 
                 Elements content;
 
-                int delivery_idx = full_order.items[0].delivery_selection;
+                int delivery_idx =
+                    history_full_order.items[0].delivery_selection;
 
                 // 检查送达选项是否合规
                 if (delivery_idx < 0 || delivery_idx >= 3)
@@ -59,7 +60,7 @@ void HistoryOrderLayOut::init_page(AppContext &ctx,
 
                 // 预计送达时间
                 time_t arrival_t = Utils::add_days_to_time(
-                    full_order.order_time,
+                    history_full_order.order_time,
                     delivery_required_time[delivery_idx]);
 
                 auto format_arrival_t =
@@ -69,11 +70,11 @@ void HistoryOrderLayOut::init_page(AppContext &ctx,
                 std::string order_status;
                 Element status_text;
 
-                if (full_order.status == FullOrderStatus::CANCEL) {
+                if (history_full_order.status == FullOrderStatus::CANCEL) {
                     order_status = "订单已取消";
                     status_text = text(order_status) | color(Color::RedLight);
                 }
-                if (full_order.status == FullOrderStatus::COMPLETED) {
+                if (history_full_order.status == FullOrderStatus::COMPLETED) {
                     order_status = "订单已完成";
                     status_text =
                         text(order_status) | color(Color::GreenLight) | bold;
@@ -82,7 +83,8 @@ void HistoryOrderLayOut::init_page(AppContext &ctx,
                 content.push_back(
                     hbox({text(" 订单号: " + std::to_string(order_id)),
                           text("    "), text(" 下单时间: "),
-                          text(Utils::time_to_string(full_order.order_time)) |
+                          text(Utils::time_to_string(
+                              history_full_order.order_time)) |
                               color(Color::Green),
                           filler(), text("订单状态: "), status_text, filler(),
                           text("预计抵达时间: "),
@@ -92,12 +94,10 @@ void HistoryOrderLayOut::init_page(AppContext &ctx,
                 content.push_back(separatorLight());
 
                 // --- 商品明细 ---
-                for (const auto &item : full_order.items) {
-                    auto prod_opt =
-                        ctx.product_manager.get_product(item.product_id);
-                    std::string name =
-                        prod_opt ? prod_opt->product_name + "" : "已下架商品";
-                    double price = prod_opt ? prod_opt->price : 0.0;
+                for (const auto &item : history_full_order.items) {
+                    // 商品信息
+                    std::string name = std::string(item.product_name);
+                    double price = item.price;
 
                     content.push_back(hbox({
                         text(" 商品名: "),
@@ -133,10 +133,11 @@ void HistoryOrderLayOut::init_page(AppContext &ctx,
 
                 content.push_back(hbox({
                     text(" 送达地址: "),
-                    text(full_order.address + "") | color(Color::Cyan),
+                    text(history_full_order.address + "") | color(Color::Cyan),
                     filler(),
                     text("合计: ") | bold,
-                    text("￥" + Utils::format_price(full_order.total_price)) |
+                    text("￥" +
+                         Utils::format_price(history_full_order.total_price)) |
                         color(Color::Yellow) | bold,
                 }));
 

@@ -78,6 +78,10 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
         // 调用 OrderManager 更新地址
         ctx.order_manager.update_order_info(temp_selected_order_id, new_address,
                                             -1); // -1 表示不改配送
+        // 同样调用 HistoryManager 同步更新
+        ctx.history_order_manager.update_history_order_info(
+            temp_selected_order_id, new_address, -1);
+
         status_text = "修改成功";
         show_popup = 3;
     });
@@ -127,9 +131,13 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
         Menu(&delivery_choices, &temp_selected_delivery_idx, menu_opt);
 
     auto btn_delivery_confirm = Button("确认修改", [this, &ctx] {
-        // 由于是分离的逻辑，我们这里只更新配送:
+        // 订单更新配送
         ctx.order_manager.update_order_info(temp_selected_order_id, "",
                                             temp_selected_delivery_idx);
+        // 历史订单更新配送
+        ctx.history_order_manager.update_history_order_info(
+            temp_selected_order_id, "", temp_selected_delivery_idx);
+
         status_text = "配送方式已更新";
         show_popup = 5;
     });
@@ -169,8 +177,13 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
 
     // [Popup 6] 取消订单确认
     auto btn_cancel_yes = Button("确定取消", [this, &ctx, on_orders_delete] {
+        // 更新订单状态
         ctx.order_manager.cancel_order(temp_selected_order_id,
                                        ctx.product_manager);
+        // 更新历史订单状态
+        ctx.history_order_manager.cancel_history_order(temp_selected_order_id,
+                                                       ctx.product_manager);
+
         show_popup = 0;
         on_orders_delete(); // 刷新页面
     });

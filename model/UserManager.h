@@ -1,3 +1,9 @@
+/**
+ * @file      UserManager.h
+ * @brief     用户管理模块头文件
+ * @details
+ * 定义了用户类(User)和用户管理类(UserManager)，负责用户的注册、登录校验及数据持久化。
+ */
 #pragma once
 
 #include "FileError.h"

@@ -13,6 +13,7 @@ enum class FullOrderStatus {
     NOT_COMPLETED = 0, // 未抵达
     COMPLETED = 1,     // 已抵达
     CANCEL = -1,       // 取消
+
 };
 
 struct OrderItem {
@@ -58,11 +59,8 @@ class OrderManager {
   private:
     using string_view = std::string_view;
 
-    // 数据库文件1: 存储 OrderItem 的文件
+    // 数据库文件
     std::string m_order_db_filename;
-
-    // 数据库文件2： Cart 数据库文件
-    std::string m_cart_db_filename;
 
     // 从数据库中加载的单一用户的订单列表（供 UI 绘制）
     std::map<long long, FullOrder> orders_map;
@@ -87,14 +85,19 @@ class OrderManager {
     // 据此更新商品库存
     FileErrorCode update_stock_by_order_id(const long long order_id,
                                            ProductManager product_manager);
+    // 内部辅助：更新文件中的订单状态
+    FileErrorCode update_status_in_file(long long order_id,
+                                        FullOrderStatus new_status);
+
+    // 配送时间映射 (索引对应配送方式 0, 1, 2)
+    // 0: 普通(5天), 1: 普快(3天), 2: 特快(0天)
+    const std::vector<int> DELIVERY_DAYS = {5, 3, 1};
 
   public:
     OrderManager(const string_view &order_db_filename)
         : m_order_db_filename(order_db_filename) {}
 
     // 加载并聚合订单
-    // UI层可以通过检查 FullOrder.status
-    // 来过滤“正在进行”或“历史”订单(HistoryOrderPage)
     FileErrorCode load_full_orders(const int user_id,
                                    ProductManager &product_manager);
 
@@ -118,6 +121,9 @@ class OrderManager {
     FileErrorCode update_order_info(const long long order_id,
                                     const std::string &new_address,
                                     const int new_delivery_selection);
+
+    // 检查是否有订单已经到达，并自动更新状态
+    void check_and_update_arrived_orders(int user_id);
 
     ~OrderManager() {}
 };

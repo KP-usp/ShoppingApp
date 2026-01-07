@@ -16,6 +16,7 @@ int main() {
     string product_db_filename = "ProductInfoDatabase.dat";
     string cartItem_db_filename = "CartInfoDatabase.dat";
     string orderItem_db_filename = "OrderInfoDatabase.dat";
+    string historyOrderItem_db_filename = "HistoryOrderInfoDatabase.dat";
 
     // 管理员
     string username = "lei";
@@ -32,7 +33,7 @@ int main() {
     vector<int> stock = {100, 100, 100, 3};
 
     AppContext ctx(user_db_filename, product_db_filename, cartItem_db_filename,
-                   orderItem_db_filename);
+                   orderItem_db_filename, historyOrderItem_db_filename);
 
     ShopAppUI my_app(ctx);
 

@@ -24,10 +24,11 @@ struct AppContext {
     AppContext(const std::string_view &user_db_filename,
                const std::string_view &product_db_filename,
                const std::string_view &cart_db_filename,
-               const std::string_view &order_db_filename)
+               const std::string_view &order_db_filename,
+               const std::string_view &history_order_db_filename)
         : user_manager(user_db_filename), product_manager(product_db_filename),
           cart_manager(cart_db_filename), order_manager(order_db_filename),
-          history_order_manager(order_db_filename) {}
+          history_order_manager(history_order_db_filename) {}
 
     // 禁用赋值函数，采用单例
     AppContext &operator=(const AppContext &&) = delete;

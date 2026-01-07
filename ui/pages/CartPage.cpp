@@ -102,6 +102,11 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
 
             ctx.order_manager.add_order(user_id, ordered_cart_lists,
                                         input_address);
+            // 添加快照到历史订单数据库
+            ctx.history_order_manager.add_history_order(
+                user_id, ctx.product_manager, ordered_cart_lists,
+                input_address);
+
             show_popup = 0;
             checkout_success();
         });
