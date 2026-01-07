@@ -1,3 +1,15 @@
+/**
+ * @file      HistoryOrderManager.cpp
+ * @brief     历史订单管理模块实现文件
+ * @details   实现了 HistoryOrderManager 类，用于管理已归档的历史订单快照。
+ *            提供了历史记录的写入、聚合查询、状态更新（如取消/删除）
+ *            以及清空历史记录（逻辑删除）的具体实现。
+ * @author    KP-usp
+ * @date      2025-01-7
+ * @version   1.0
+ * @copyright Copyright (c) 2025
+ */
+
 #include "HistoryOrderManager.h"
 #include <fstream>
 #include <iostream>
@@ -249,5 +261,52 @@ FileErrorCode HistoryOrderManager::add_history_order(
     }
     outfile.close();
 
+    return FileErrorCode::OK;
+}
+
+FileErrorCode
+HistoryOrderManager::delete_all_history_orders(const int user_id) {
+    string path = Utils::get_database_path(m_db_filename);
+
+    fstream iofile(path, ios_base::binary | ios_base::in | ios_base::out);
+
+    if (!iofile.is_open()) {
+        return FileErrorCode::OpenFailure;
+    }
+
+    HistoryOrderItem temp;
+    bool found_any = false;
+
+    // 遍历文件
+    while (iofile.read(reinterpret_cast<char *>(&temp),
+                       sizeof(HistoryOrderItem))) {
+
+        // 匹配用户ID，且当前状态不是 DELETED (避免重复写入)
+        if (temp.id == user_id && temp.status != FullOrderStatus::DELETED) {
+
+            temp.status = FullOrderStatus::DELETED;
+
+            long write_pos = (long)iofile.tellg() - sizeof(HistoryOrderItem);
+
+            iofile.seekp(write_pos);
+
+            iofile.write(reinterpret_cast<const char *>(&temp),
+                         sizeof(HistoryOrderItem));
+
+            iofile.seekg(iofile.tellp());
+
+            found_any = true;
+        }
+    }
+
+    iofile.close();
+
+    // 如果内存中已加载该用户的数据，清空内存缓存以保持同步
+    if (is_loaded) {
+        history_orders_map.clear();
+        // 此时 is_loaded 仍为 true，但 map 为空，表现为无历史记录
+    }
+
+    // 只要文件操作没问题，就算没找到订单也返回 OK
     return FileErrorCode::OK;
 }

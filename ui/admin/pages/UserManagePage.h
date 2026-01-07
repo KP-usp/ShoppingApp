@@ -46,6 +46,14 @@ class UserManageLayOut {
 
     void refresh(AppContext &ctx, std::function<void()> back_dashboard,
                  std::function<void()> refresh_user_manage_page) {
+        search_query = "";
+        edit_password = "";
+        status_msg = "";
+        edit_is_admin = false;
+        selected_user_id = -1;
+        selected_username_display = "";
+        show_popup = 0;
+
         init_page(ctx, back_dashboard, refresh_user_manage_page);
     }
 };

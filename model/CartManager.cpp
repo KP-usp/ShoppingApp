@@ -1,3 +1,15 @@
+/**
+ * @file      CartManager.cpp
+ * @brief     购物车管理模块实现文件
+ * @details   实现了 CartManager 类的功能，包括购物车数据的加载、
+ *            商品添加/删除/更新、库存检查预备逻辑以及结算数据打包。
+ *            负责处理购物车二进制文件的 CRUD 操作。
+ * @author    KP-usp
+ * @date      2025-01-7
+ * @version   1.0
+ * @copyright Copyright (c) 2025
+ */
+
 #include "CartManager.h"
 #include <fstream>
 #include <iostream>

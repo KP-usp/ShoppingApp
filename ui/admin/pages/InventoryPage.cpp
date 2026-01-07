@@ -1,5 +1,6 @@
 #include "InventoryPage.h"
 #include "SharedComponent.h"
+#include <fstream>
 #include <vector>
 
 void InventoryLayOut::init_page(AppContext &ctx,
@@ -14,6 +15,18 @@ void InventoryLayOut::init_page(AppContext &ctx,
     //  搜索组件
     // Input 每次输入都会更新 search_query
     auto search_input = Input(&search_query, "输入 ID 或 商品名称进行搜索...");
+
+    // 允许在按下回车时直接触发搜索
+    auto search_input_logic =
+        CatchEvent(search_input,
+                   [this, &ctx, list_container, back_dashboard](Event event) {
+                       if (event == Event::Return) {
+
+                           refresh_list(ctx, list_container, back_dashboard);
+                           return true; // 消费事件，不传入 Input，防止换行
+                       }
+                       return false;
+                   });
 
     // 搜索按钮 (手动触发刷新)
     auto btn_search = Button(
@@ -150,25 +163,12 @@ void InventoryLayOut::init_page(AppContext &ctx,
         {input_add_name, input_add_price, input_add_stock,
          Container::Horizontal({btn_save_add, btn_cancel_add})});
 
-    std::string path = "data/debug.log";
-    std::ofstream outfile1(path, std::ios_base::app);
-    if (outfile1.is_open()) {
-        outfile1 << "加载列表之前" << std::endl;
-        outfile1.close();
-    }
-
     // --- 初始加载列表 ---
     refresh_list(ctx, list_container, back_dashboard);
 
-    std::ofstream outfile(path, std::ios_base::app);
-    if (outfile.is_open()) {
-        outfile << "加载列表之后" << std::endl;
-        outfile.close();
-    }
-
     // --- 组装主页面结构 ---
-    auto top_bar =
-        Container::Horizontal({search_input | flex, btn_search, btn_add_new});
+    auto top_bar = Container::Horizontal(
+        {search_input_logic | flex, btn_search, btn_add_new});
     // 支持鼠标滚动进度条
     auto scroller = SharedComponents::Scroller(list_container);
     auto final_logic_content =

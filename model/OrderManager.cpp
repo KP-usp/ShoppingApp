@@ -1,3 +1,17 @@
+/**
+ * @file      OrderManager.cpp
+ * @brief     订单管理模块实现文件
+ * @details   实现了 OrderManager 类，核心功能包括：
+ *            1. 将购物车条目转化为订单项并持久化。
+ *            2. 将分散的数据库订单项(OrderItem)聚合为完整订单(FullOrder)。
+ *            3. 实现订单状态流转（下单 -> 配送 -> 完成/取消）。
+ *            4. 模拟物流时间的自动收货逻辑。
+ * @author    KP-usp
+ * @date      2025-01-7
+ * @version   1.0
+ * @copyright Copyright (c) 2025
+ */
+
 #include "OrderManager.h"
 #include "CartManager.h"
 #include <fstream>
@@ -32,14 +46,6 @@ FileErrorCode OrderManager::load_full_orders(const int user_id,
     while (infile.read(reinterpret_cast<char *>(&temp), sizeof(OrderItem))) {
 
         if (temp.id == user_id) {
-
-            std::string path1 = "data/debug.log";
-
-            std::ofstream outfile(path1, std::ios_base::app);
-            if (outfile.is_open()) {
-                outfile << "找到了订单" << std::endl;
-                outfile.close();
-            }
 
             FullOrder &order = orders_map[temp.order_id];
 

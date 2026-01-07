@@ -36,7 +36,8 @@ ShopAppUI::ShopAppUI(AppContext &context) : ctx(context) {
     };
 
     refresh_history_order_page = [this] {
-        history_order_layout->refresh(ctx, on_orders_info, on_shopping);
+        history_order_layout->refresh(ctx, on_orders_info, on_shopping,
+                                      refresh_history_order_page);
         history_order_container_slot->DetachAllChildren();
         history_order_container_slot->Add(
             history_order_layout->get_component());
@@ -100,7 +101,7 @@ ShopAppUI::ShopAppUI(AppContext &context) : ctx(context) {
 
             // 初始化历史订单页面
             history_order_layout = std::make_shared<HistoryOrderLayOut>(
-                ctx, on_orders_info, on_shopping);
+                ctx, on_orders_info, on_shopping, refresh_history_order_page);
 
             // 加载用户内容
             cart_container_slot->DetachAllChildren();

@@ -478,7 +478,7 @@ void OrderLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
                                  dim | center | color(Color::GrayLight),
                              text(" ") | size(HEIGHT, EQUAL, 1),
                          }) | borderDouble |
-                             color(Color::YellowLight),
+                             color(Color::GreenLight),
 
                          order_container->Render(),
 

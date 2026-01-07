@@ -12,6 +12,9 @@ class ShopLayOut {
     // 存储用户购买商品数量
     std::vector<int> quantities;
 
+    // 存储数量输入框的文本内容 (UI显示/输入用)
+    std::vector<std::string> quantities_str;
+
     // 当前显示的商品列表
     std::vector<Product> current_products;
 
@@ -21,7 +24,8 @@ class ShopLayOut {
     Component component;
 
     // 弹窗 index
-    int show_popup = 0; // 0-商品页 1-没选商品添加提示 2-库存不足添加提示
+    int show_popup =
+        0; // 0-商�页 1-没选商品添加提示 2-库存不足添加提示 3-数量格式错误
 
   public:
     // 构造体：创建商城页面组件，并通过接受购买结算函数跳转购物车页面
@@ -45,6 +49,7 @@ class ShopLayOut {
         // 清空容器，重置 vector 成员
         component->DetachAllChildren();
         quantities.clear();
+        quantities_str.clear();
         show_popup = 0;
         init_page(ctx, on_checkout, add_cart);
     }

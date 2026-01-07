@@ -1,3 +1,11 @@
+/**
+ * @file      HistoryOrderManager.h
+ * @brief     历史订单管理模块头文件
+ * @details 定义了历史订单项(HistoryOrderItem)、历史订单聚合体(HistoryFullOrder)
+ *            及历史订单管理类(HistoryOrderManager)。
+ *            负责历史订单的归档、查询、状态自动更新以及记录清除。
+ */
+
 #pragma once
 #include "CartManager.h"
 #include "FileError.h"
@@ -10,20 +18,28 @@
 #include <string_view>
 #include <vector>
 
+/**
+ * @brief 历史订单项结构体 (数据库存储格式)
+ *
+ * 存储已经归档（下单后）的商品记录快照。
+ * 包含当时购买的价格、名称等信息，不再随商品库变化而变化。
+ */
 struct HistoryOrderItem {
     static constexpr int MAX_ADDRESS_LENGTH = 50;
     static constexpr int MAX_PRODUCT_NAME_SIZE = 100;
-    int id;
-    FixedString<MAX_PRODUCT_NAME_SIZE> product_name;
-    double price;
-    long long order_id;
-    int count;
-    time_t order_time;
-    int delivery_selection;
-    FixedString<MAX_ADDRESS_LENGTH> address;
-    FullOrderStatus status; // 与聚合物一致的状态
+
+    int id;                                          ///< 用户 ID
+    FixedString<MAX_PRODUCT_NAME_SIZE> product_name; ///< 商品名称快照
+    double price;                                    ///< 购买时的单价快照
+    long long order_id;                              ///< 订单号
+    int count;                                       ///< 购买数量
+    time_t order_time;                               ///< 下单时间
+    int delivery_selection;                          ///< 配送方式索引
+    FixedString<MAX_ADDRESS_LENGTH> address;         ///< 配送地址
+    FullOrderStatus status;                          ///< 订单状态
 
     HistoryOrderItem() = default;
+
     HistoryOrderItem(const int user_id, const std::string &name, const double p,
                      const int count, const time_t time,
                      const int delivery_selection, const std::string addr,
@@ -33,43 +49,57 @@ struct HistoryOrderItem {
           order_id(time + user_id), address(addr), status(s) {}
 };
 
+/**
+ * @brief 历史订单聚合体 (内存聚合格式)
+ *
+ * 用于 UI 展示。将同一订单号的分散商品项聚合在一起，
+ * 并计算总金额（含运费）。
+ */
 struct HistoryFullOrder {
     static constexpr int MAX_ADDRESS_LENGTH = 50;
-    long long order_id;
-    double total_price = 0.0;
-    time_t order_time;
-    std::vector<HistoryOrderItem> items;
-    FixedString<MAX_ADDRESS_LENGTH> address;
-    FullOrderStatus status = FullOrderStatus::NOT_COMPLETED; // 聚合状态
+
+    long long order_id;                      ///< 订单号
+    double total_price = 0.0;                ///< 订单总价
+    time_t order_time;                       ///< 下单时间
+    std::vector<HistoryOrderItem> items;     ///< 包含的商品项列表
+    FixedString<MAX_ADDRESS_LENGTH> address; ///< 配送地址
+    FullOrderStatus status = FullOrderStatus::NOT_COMPLETED; ///< 聚合状态
 };
 
+/**
+ * @brief 历史订单管理类
+ *
+ * 管理历史订单数据库，提供归档记录的增加、读取、状态更新及清空功能。
+ * 用于“我的订单”或“历史记录”页面的数据支持。
+ */
 class HistoryOrderManager {
   private:
     using string_view = std::string_view;
 
-    // 数据库文件名
+    // 历史订单数据库文件名
     std::string m_db_filename;
 
-    // 历史订单缓存 (key: order_id)
+    // 内存缓存：历史订单映射表 (key: order_id)
     std::map<long long, HistoryFullOrder> history_orders_map;
 
+    // 标志位：当前用户的历史数据是否已加载
     bool is_loaded = false;
 
     // 配送时间映射 (索引对应配送方式 0, 1, 2)
-    // 0: 普通(5天), 1: 普快(3天), 2: 特快(0天)
+    // 0: 普通(5天), 1: 普快(3天), 2: 特快(1天)
     const std::vector<int> DELIVERY_DAYS = {5, 3, 1};
 
-    // 获取当前系统时间
+    // 辅助函数：获取当前系统时间戳
     time_t get_current_time() {
         auto now = std::chrono::system_clock::now();
         return std::chrono::system_clock::to_time_t(now);
     }
 
-    // 内部辅助：更新文件中的订单状态
+    // 辅助函数：更新文件中的订单状态 (仅更新 status 字段)
     FileErrorCode update_status_in_file(long long order_id,
                                         FullOrderStatus new_status);
 
-    // 辅助：通用更新函数，根据 order_id 更新特定字段
+    // 辅助函数：通用更新函数，根据 order_id 更新特定字段(状态/地址/配送)
     FileErrorCode
     update_history_order_in_file(const long long order_id,
                                  std::optional<FullOrderStatus> new_status,
@@ -77,31 +107,97 @@ class HistoryOrderManager {
                                  std::optional<int> new_delivery);
 
   public:
+    /**
+     * @brief 构造函数
+     *
+     * @param order_db_filename 历史订单数据库文件名
+     */
     HistoryOrderManager(const string_view &order_db_filename)
         : m_db_filename(order_db_filename) {}
 
-    // 检查是否有订单已到期，并自动更新状态为 COMPLETED
+    /**
+     * @brief 检查并自动收货
+     *
+     * 遍历数据库，检查未完成的订单是否已超过预计送达时间。
+     * 若已超时，自动将状态更新为 COMPLETED。
+     *
+     * @param user_id 用户 ID
+     */
     void check_and_update_arrived_orders(int user_id);
 
-    // 加载属于该用户的历史订单（已完成 + 已取消）
+    /**
+     * @brief 加载历史订单
+     *
+     * 读取属于该用户的历史记录，过滤出 COMPLETED 或 CANCEL 状态的订单，
+     * 并聚合到内存 map 中供 UI 调用。
+     *
+     * @param user_id 用户 ID
+     * @param product_manager 商品管理器引用（预留接口，目前主要使用快照数据）
+     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS
+     */
     FileErrorCode load_history_orders(const int user_id,
                                       ProductManager &product_manager);
-    // 添加历史订单（订单快照）
+
+    /**
+     * @brief 添加历史订单
+     *
+     * 在用户下单时调用，将购物车内容转换为历史快照存入数据库。
+     *
+     * @param user_id 用户 ID
+     * @param product_manager 商品管理器（用于获取商品名称和当前价格）
+     * @param cart_lists 购物车商品列表
+     * @param address 配送地址
+     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS
+     */
     FileErrorCode add_history_order(const int user_id,
                                     ProductManager &product_manager,
                                     std::vector<CartItem> cart_lists,
                                     const std::string address);
 
-    // 将对应历史订单置删除状态
+    /**
+     * @brief 取消历史订单
+     *
+     * 将对应的历史订单状态修改为 CANCEL。
+     *
+     * @param order_id 订单号
+     * @param product_manager 商品管理器引用
+     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS
+     */
     FileErrorCode cancel_history_order(const long long order_id,
                                        ProductManager &product_manager);
 
-    // 更新历史订单信息 (包含地址和配送服务)
+    /**
+     * @brief 更新历史订单信息
+     *
+     * 修改订单的配送地址或配送方式。
+     *
+     * @param order_id 订单号
+     * @param new_address 新地址（传空字符串表示不修改）
+     * @param new_delivery_selection 新配送方式（传-1表示不修改）
+     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS
+     */
     FileErrorCode update_history_order_info(const long long order_id,
                                             const std::string &new_address,
                                             const int new_delivery_selection);
 
-    // 获取历史订单 Map 指针
+    /**
+     * @brief 删除指定用户的所有历史订单（逻辑删除）
+     *
+     * 将该用户所有的历史订单项状态更新为 DELETED。
+     * 这些记录仍在数据库文件中，但不再会被 load_history_orders 加载。
+     *
+     * @param user_id 用户 ID
+     * @return FileErrorCode 成功返回 FileErrorCode::OK，文件打开失败返回
+     * FileErrorCode::OpenFailure
+     */
+    FileErrorCode delete_all_history_orders(const int user_id);
+
+    /**
+     * @brief 获取历史订单映射指针
+     *
+     * @return std::optional<std::map<long long, HistoryFullOrder> *>
+     * 若已加载返回指针，否则返回 nullopt
+     */
     std::optional<std::map<long long, HistoryFullOrder> *>
     get_history_map_ptr() {
         if (is_loaded)
@@ -110,8 +206,6 @@ class HistoryOrderManager {
             return std::nullopt;
     }
 
-    // 清空历史记录（逻辑删除或物理删除，此处暂且保留接口，视需求实现）
-    // FileErrorCode clear_history(int user_id);
-
+    // 析构器
     ~HistoryOrderManager() {}
 };

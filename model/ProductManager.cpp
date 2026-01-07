@@ -1,3 +1,15 @@
+/**
+ * @file      ProductManager.cpp
+ * @brief     商品管理模块实现文件
+ * @details   实现了 ProductManager 类，负责商品信息的全生命周期管理。
+ *            包括商品库初始化、商品上架(新增)、下架(删除)、信息修改
+ *            以及基于名称的模糊搜索算法实现。
+ * @author    KP-usp
+ * @date      2025-01-7
+ * @version   1.0
+ * @copyright Copyright (c) 2025
+ */
+
 #include "ProductManager.h"
 #include "FileHeader.h"
 #include <fstream>

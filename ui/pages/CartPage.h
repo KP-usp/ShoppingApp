@@ -19,6 +19,9 @@ class CartLayOut {
     // 商品购买数量
     std::vector<int> quantities;
 
+    // 存储数量输入框的文本内容 (UI显示/输入用)
+    std::vector<std::string> quantities_str;
+
     // 是否选中商品, 1 代表选中而 0 代表未选中
     std::deque<bool> is_chosen;
 

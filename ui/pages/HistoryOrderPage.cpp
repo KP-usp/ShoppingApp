@@ -2,9 +2,10 @@
 #include "SharedComponent.h"
 #include <fstream>
 
-void HistoryOrderLayOut::init_page(AppContext &ctx,
-                                   std::function<void()> on_orders_info,
-                                   std::function<void()> on_shopping) {
+void HistoryOrderLayOut::init_page(
+    AppContext &ctx, std::function<void()> on_orders_info,
+    std::function<void()> on_shopping,
+    std::function<void()> refresh_history_order_page) {
 
     //  数据加载
     int user_id = (*(ctx.current_user)).id;
@@ -16,10 +17,36 @@ void HistoryOrderLayOut::init_page(AppContext &ctx,
     auto btn_to_orders_info =
         Button("订单详情", on_orders_info, ButtonOption::Animated(Color::Cyan));
 
-    auto btn_container = Container::Horizontal({
-        btn_to_orders_info,
-        btn_to_shopping,
-    });
+    // 清除历史订单按钮
+    auto btn_clear_history_orders = Button(
+        "清除历史订单", [this] { show_popup = 1; },
+        ButtonOption::Animated(Color::Red));
+
+    // 弹窗确认按钮
+    auto btn_confirm_clear_history_orders = Button(
+        "确认清除",
+        [this, &ctx, refresh_history_order_page, user_id] {
+            ctx.history_order_manager.delete_all_history_orders(user_id);
+            show_popup = 0;
+            refresh_history_order_page();
+        },
+        ButtonOption::Animated(Color::Red));
+
+    auto btn_cancel_clear_history_orders = Button(
+        "取消",
+        [this, refresh_history_order_page] {
+            show_popup = 0;
+            refresh_history_order_page();
+        },
+        ButtonOption::Animated(Color::Green));
+
+    // 底部按钮容器
+    auto btn_container = Container::Horizontal(
+        {btn_to_orders_info, btn_to_shopping, btn_clear_history_orders});
+
+    // 弹窗按钮容器
+    auto btn_popup_container = Container::Horizontal(
+        {btn_confirm_clear_history_orders, btn_cancel_clear_history_orders});
 
     // 订单列表逻辑容器
     auto history_order_list_container = Container::Vertical({});
@@ -173,34 +200,56 @@ void HistoryOrderLayOut::init_page(AppContext &ctx,
             btn_container,
         });
 
+        auto popup_hint_renderer = Renderer(btn_popup_container, [=] {
+            return window(text("清除确认"),
+                          vbox({text("确定要所有的历史订单记录吗？") | center,
+                                text("取消后无法恢复") | color(Color::Red) |
+                                    center,
+                                separator(),
+                                btn_popup_container->Render() | center})) |
+                   size(WIDTH, GREATER_THAN, 40) | clear_under | center;
+        });
+
         // 支持滚轮在按钮和卡片之间的切换
         auto main_view = SharedComponents::allow_scroll_action(main_layout);
 
+        // 弹窗组件
+        auto final_container =
+            Container::Tab({main_view, popup_hint_renderer}, &show_popup);
+
         // 最终渲染
-        this->component = Renderer(main_view, [=] {
-            return vbox(
-                {// 标题栏
-                 vbox({
-                     text(" ") | size(HEIGHT, EQUAL, 1),
-                     text(" 历 史 订 单") | bold | center,
-                     text(" —— 查 看 您 的 消 费 足 迹 —— ") | dim | center |
-                         color(Color::GrayLight),
-                     text(" ") | size(HEIGHT, EQUAL, 1),
-                 }) | borderDouble |
-                     color(Color::YellowLight),
+        this->component = Renderer(final_container, [=] {
+            auto background =
+                vbox({// 标题栏
+                      vbox({
+                          text(" ") | size(HEIGHT, EQUAL, 1),
+                          text(" 历 史 订 单") | bold | center,
+                          text(" —— 查 看 您 的 消 费 足 迹 —— ") | dim |
+                              center | color(Color::GrayLight),
+                          text(" ") | size(HEIGHT, EQUAL, 1),
+                      }) | borderDouble |
+                          color(Color::YellowLight),
 
-                 // 中间滚动区
-                 scroller->Render() | flex,
+                      // 中间滚动区
+                      scroller->Render() | flex,
 
-                 // 底部操作区 (使用 filler 实现要求的布局)
-                 separatorHeavy(),
-                 hbox({
-                     filler(),
-                     btn_to_orders_info->Render() | size(WIDTH, EQUAL, 20),
-                     filler(),
-                     btn_to_shopping->Render() | size(WIDTH, EQUAL, 20),
-                     filler(),
-                 }) | size(HEIGHT, EQUAL, 3)});
+                      // 底部操作区 (使用 filler 实现要求的布局)
+                      separatorHeavy(),
+                      hbox({
+                          filler(),
+                          btn_to_orders_info->Render() | size(WIDTH, EQUAL, 15),
+                          filler(),
+                          btn_to_shopping->Render() | size(WIDTH, EQUAL, 15),
+                          filler(),
+                          btn_clear_history_orders->Render() |
+                              size(WIDTH, EQUAL, 15),
+                          filler(),
+                      }) | size(HEIGHT, EQUAL, 3)});
+            if (show_popup == 1) {
+                return dbox({background, final_container->Render()});
+            }
+
+            return background;
         });
 
     } else {

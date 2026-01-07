@@ -86,6 +86,7 @@ class ShopAppUI {
 
     AppContext &get_context() { return ctx; }
 
+    // UI 界面运行主逻辑
     void run() {
         auto screen = ScreenInteractive::Fullscreen();
 

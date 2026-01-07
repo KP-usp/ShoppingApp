@@ -54,11 +54,13 @@ RegisterLayOut::RegisterLayOut(AppContext &ctx,
                     text("新用户名:   ") | center,
                     input_username->Render(),
                 }) | size(WIDTH, GREATER_THAN, 30),
+                text("提示：用户名区分大小写，在 2 - 16 字符之间") |
+                    color(Color::Yellow),
                 hbox({
                     text("新密码:     ") | center,
                     input_password->Render(),
                 }) | size(WIDTH, GREATER_THAN, 30),
-
+                text("提示：密码在 5 - 16 字符之间") | color(Color::Yellow),
                 hbox({
                     text("验证新密码: ") | center,
                     input_again_password->Render(),

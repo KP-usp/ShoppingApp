@@ -21,9 +21,11 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
         delivery_selections = std::vector<int>(cart_list.size(), 0);
         is_chosen = std::deque<bool>(cart_list.size(), false);
         quantities = std::vector<int>(cart_list.size(), 0);
+        quantities_str = std::vector<std::string>(cart_list.size(), "0");
 
         for (int i = 0; i < cart_list.size(); i++) {
             quantities[i] = cart_list[i].count;
+            quantities_str[i] = std::to_string(cart_list[i].count);
         }
 
         // 定义交互按钮组件
@@ -148,6 +150,9 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
                 show_popup = 1;
         });
 
+        // 提示数量格式错误确定按钮
+        auto btn_qty_format_error = Button("确定", [this] { show_popup = 0; });
+
         // 取消选择地址按钮
         auto btn_addr_no = Button("取消", [this] { show_popup = 0; });
 
@@ -200,14 +205,59 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
             // 勾选框组件，商品名放在后面组装
             auto select_checkbox = Checkbox("", &(is_chosen[i]), check_opt);
 
+            // 商品数量输入框
+            auto input_qty = Input(&quantities_str[i]);
+
+            // 为输入框添加逻辑：当用户输入时，更新 quantities[i] (int)
+            auto input_qty_logic =
+                CatchEvent(input_qty, [this, i, input_qty](Event event) {
+                    // 让 Input 组件先处理字符输入
+                    bool handled = input_qty->OnEvent(event);
+
+                    // 数据同步逻辑: String -> Int
+                    try {
+                        if (quantities_str[i].empty()) {
+                            quantities[i] = 0;
+                        } else {
+                            // 尝试转换，如果输入了非数字（如 abc），stoi
+                            // 会抛出异常
+                            int val = std::stoi(quantities_str[i]);
+                            // 限制负数
+                            if (val < 0) {
+                                val = 0;
+                                quantities_str[i] = "1";
+                            }
+
+                            quantities[i] = val;
+                        }
+                    } catch (...) {
+                        show_popup = 5; // 数量格式错误提示弹窗
+                        quantities[i] = 1;
+                        quantities_str[i] = "1";
+                    }
+                    return handled;
+                });
+
             // 选择购物车商品购买数量的按钮
-            auto btn_increment = Button(
-                "+", [this, i] { (quantities)[i]++; }, ButtonOption::Ascii());
-            auto btn_decrement = Button(
+            // "+" 按钮逻辑：同时更新 int 和 string
+            auto btn_inc = Button(
+                "+",
+                [this, i] {
+                    quantities[i]++;
+                    quantities_str[i] =
+                        std::to_string(quantities[i]); // 同步 string
+                },
+                ButtonOption::Ascii());
+
+            // "-" 按钮逻辑：同时更新 int 和 string
+            auto btn_dec = Button(
                 "-",
                 [this, i] {
-                    if ((quantities)[i] > 1)
-                        (quantities)[i]--;
+                    if (quantities[i] > 1) {
+                        quantities[i]--;
+                        quantities_str[i] =
+                            std::to_string(quantities[i]); // 同步 string
+                    }
                 },
                 ButtonOption::Ascii());
 
@@ -239,9 +289,9 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
             // 布局逻辑
             auto card_logic_layout = Container::Horizontal(
                 {select_checkbox,
-                 Container::Vertical(
-                     {Container::Horizontal({btn_decrement, btn_increment}),
-                      delivery_menu}),
+                 Container::Vertical({Container::Horizontal(
+                                          {btn_dec, input_qty_logic, btn_inc}),
+                                      delivery_menu}),
                  btn_delete});
 
             auto card_renderer = Renderer(card_logic_layout, [=, &ctx] {
@@ -253,7 +303,11 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
                     unit_price * qty + DELIVERY_PRICES[delivery_selections[i]];
 
                 // 焦点状态
+
+                // 整个卡片获焦
                 bool is_focused = card_logic_layout->Focused();
+                // Input 获焦时的状态
+                bool input_focused = input_qty->Focused();
 
                 // 获取时是否被勾选
                 bool selected = is_chosen[i];
@@ -266,6 +320,8 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
                                     ? static_cast<Color>(Color::Grey23)
                                     : static_cast<Color>(
                                           Color::Default); // 聚焦时背景稍微变亮
+                Color qty_c = qty > 0 ? Color::GreenLight : Color::GrayLight;
+
                 // 左侧的勾选区域
                 auto left_part =
                     vbox({
@@ -293,11 +349,10 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
                           // 第二行：操作区
                           hbox({// 数量控制
                                 hbox({text("数量: ") | vcenter,
-                                      btn_decrement->Render() | vcenter,
-                                      text(" " + std::to_string(qty) + " ") |
-                                          bold | center |
-                                          size(WIDTH, EQUAL, 4) | vcenter,
-                                      btn_increment->Render() | vcenter}) |
+                                      btn_dec->Render() | vcenter,
+                                      input_qty->Render() | color(qty_c) |
+                                          center | size(WIDTH, EQUAL, 6),
+                                      btn_inc->Render() | vcenter}) |
                                     borderRounded |
                                     color(Color::GrayLight), // 给数量加个小圆框
 
@@ -349,6 +404,10 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
             Container::Horizontal({btn_get_addr, btn_assure_addr, btn_addr_no});
         auto popup_address_input_layout = Container::Vertical(
             {input_address_component, popup_addr_btn_contianer});
+
+        // 弹窗5：数量格式错误提示弹窗
+        auto popup_hint_qty_format_error =
+            Container::Vertical({btn_qty_format_error});
 
         //  关键步骤：给弹窗容器包裹 Renderer 并应用样式
         // 这样让事件系统知道这些组件是被“居中”和“加框”的
@@ -403,6 +462,17 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
                        size(HEIGHT, GREATER_THAN, 8) | clear_under | center;
             });
 
+        auto popup_hint_qty_format_error_renderer =
+            Renderer(popup_hint_qty_format_error, [=] {
+                return window(
+                           text("提示"),
+                           vbox({text("商品数量格式错误") | center, separator(),
+                                 btn_qty_format_error->Render() | center |
+                                     size(WIDTH, GREATER_THAN, 10)})) |
+                       size(WIDTH, GREATER_THAN, 40) |
+                       size(HEIGHT, GREATER_THAN, 8) | clear_under | center;
+            });
+
         //  使用 Tab 切换逻辑焦点
         // 将包装好样式的 Renderer 放进 Tab，而不是原始 Container
         auto logic_container = Container::Tab(
@@ -414,6 +484,9 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
                 popup_hint_no_choice_renderer,       // index 3:
                                                      // 提示未选择商品（带样式）
                 popup_address_input_renderer, // index 4: 填写地址弹窗（带样式）
+                popup_hint_qty_format_error_renderer // index 5:
+                                                     // 数量格式错误提示弹窗(带样式)
+
             },
             &show_popup);
 

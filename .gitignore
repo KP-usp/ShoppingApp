@@ -4,3 +4,7 @@ bin/
 compile_commands.json
 
 .cache/
+
+./debug_template.txt
+
+./data/debug.log

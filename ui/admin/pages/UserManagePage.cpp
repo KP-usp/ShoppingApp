@@ -1,6 +1,6 @@
 #include "UserManagePage.h"
-#include "InventoryPage.h"
 #include "SharedComponent.h"
+#include <fstream>
 #include <vector>
 
 void UserManageLayOut::init_page(
@@ -11,6 +11,18 @@ void UserManageLayOut::init_page(
 
     // 搜索组件
     auto search_input = Input(&search_query, "输入 ID 或 用户名进行搜索...");
+
+    // 允许在按下回车时直接触发搜索
+    auto search_input_logic =
+        CatchEvent(search_input,
+                   [this, &ctx, list_container, back_dashboard](Event event) {
+                       if (event == Event::Return) {
+
+                           refresh_list(ctx, list_container, back_dashboard);
+                           return true; // 消费事件，不传入 Input，防止换行
+                       }
+                       return false;
+                   });
 
     // 搜索按钮
     auto btn_search = Button(
@@ -113,14 +125,14 @@ void UserManageLayOut::init_page(
     refresh_list(ctx, list_container, back_dashboard);
 
     // 布局组装
+    auto top_bar =
+        Container::Horizontal({search_input_logic | flex, btn_search});
     auto scroller = SharedComponents::Scroller(list_container);
-    auto main_logic_content = Container::Vertical({scroller, btn_back});
-    auto final_main_content = Container::Vertical(
-        {Container::Horizontal({search_input | flex, btn_search}),
-         main_logic_content});
+    auto final_logic_content =
+        Container::Vertical({top_bar, scroller | flex, btn_back});
 
     auto final_main_layout =
-        SharedComponents::allow_scroll_action(final_main_content);
+        SharedComponents::allow_scroll_action(final_logic_content);
 
     auto tab_container = Container::Tab(
         {
@@ -223,6 +235,7 @@ void UserManageLayOut::refresh_list(AppContext &ctx, Component list_container,
 
     //  搜索到的数据
     auto users = ctx.user_manager.search_users_list(search_query);
+    std::string path = "data/debug.log";
 
     if (users.empty()) {
         list_container->Add(Renderer([] {

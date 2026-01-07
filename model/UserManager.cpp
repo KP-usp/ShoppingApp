@@ -1,6 +1,17 @@
+/**
+ * @file      UserManager.cpp
+ * @brief     用户管理模块实现文件
+ * @details   实现了 User 类和 UserManager 类的核心逻辑，
+ *            包括用户数据库的初始化、注册校验、登录验证（哈希比对）、
+ *            用户信息修改及文件读写操作。
+ * @author    KP-usp
+ * @date      2025-01-7
+ * @version   1.0
+ * @copyright Copyright (c) 2025
+ */
+
 #include "UserManager.h"
 #include "FileHeader.h"
-
 #include <ctime>
 #include <fstream>
 #include <iostream>
@@ -147,14 +158,6 @@ FileErrorCode UserManager::append_user(const User &new_user) {
 
     string path = Utils::get_database_path(m_db_filename);
 
-    std::string path1 = "data/debug.log";
-
-    std::ofstream outfile1(path1, std::ios_base::app);
-    if (outfile1.is_open()) {
-        outfile1 << "用户 ID：" << user_to_save.id << std::endl;
-        outfile1.close();
-    }
-
     //  将用户写入文件末尾
     ofstream outfile(path, ios_base::binary | ios_base::app);
     if (!outfile.is_open()) {
@@ -264,39 +267,6 @@ std::optional<User> UserManager::get_user_by_id(const int user_id) {
     return nullopt;
 }
 
-int UserManager::search_user(const string_view &keyword) {
-    // 支持模糊查找
-
-    // 匹配个数
-    int count = 0;
-
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, ios_base::binary);
-    if (!infile.is_open()) {
-
-        cerr << "open " << path << " is failed." << endl;
-        return count;
-    }
-
-    User temp;
-
-    infile.seekg(sizeof(FileHeader), ios_base::beg);
-
-    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(User))) {
-
-        string_view current_username = temp.username;
-        if (current_username.size() >= keyword.size() &&
-            current_username.compare(0, keyword.size(), keyword) == 0 &&
-            temp.status == UserStatus::NORMAL) {
-            count++;
-        }
-    }
-
-    infile.close();
-
-    return count;
-}
-
 std::vector<User> UserManager::search_users_list(const string &query) {
     std::vector<User> result;
 
@@ -324,7 +294,8 @@ std::vector<User> UserManager::search_users_list(const string &query) {
         string user_id_str = std::to_string(temp.id);
         string username_str = string(temp.username);
 
-        if (user_id_str == query || username_str.find(query))
+        if (user_id_str == low_query ||
+            username_str.find(low_query) != string::npos)
             result.push_back(temp);
     }
 
@@ -333,7 +304,7 @@ std::vector<User> UserManager::search_users_list(const string &query) {
     return result;
 }
 
-FileErrorCode UserManager::delete_user(const int id) {
+FileErrorCode UserManager::delete_user(const int user_id) {
 
     string path = Utils::get_database_path(m_db_filename);
     std::fstream iofile(path, ios_base::in | ios_base::out | ios_base::binary);
@@ -344,7 +315,7 @@ FileErrorCode UserManager::delete_user(const int id) {
 
     User temp;
 
-    optional<streampos> target_position = get_user_pos(id);
+    optional<streampos> target_position = get_user_pos(user_id);
     if (!target_position.has_value()) {
         iofile.close();
         return FileErrorCode::NotFound;
@@ -368,7 +339,7 @@ FileErrorCode UserManager::delete_user(const int id) {
     return FileErrorCode::OK;
 }
 
-FileErrorCode UserManager::restore_user(const int id) {
+FileErrorCode UserManager::restore_user(const int user_id) {
     string path = Utils::get_database_path(m_db_filename);
     std::fstream iofile(path, ios_base::in | ios_base::out | ios_base::binary);
     if (!iofile.is_open()) {
@@ -376,7 +347,7 @@ FileErrorCode UserManager::restore_user(const int id) {
         return FileErrorCode::OpenFailure;
     }
 
-    optional<streampos> target_position = get_user_pos(id);
+    optional<streampos> target_position = get_user_pos(user_id);
     if (!target_position.has_value()) {
         iofile.close();
         return FileErrorCode::NotFound;
@@ -429,40 +400,4 @@ optional<std::streampos> UserManager::get_user_pos(const int id) {
     infile.close();
 
     return nullopt;
-}
-
-int UserManager::get_id_by_username(const string_view &username) {
-
-    int error = -1;
-
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, ios_base::binary);
-
-    if (!infile.is_open()) {
-
-        cerr << "open " << path << "is failed." << endl;
-        return error;
-    }
-
-    User temp;
-
-    infile.seekg(sizeof(FileHeader), ios_base::beg);
-
-    while (true) {
-        streampos current_pos = infile.tellg();
-
-        infile.read(reinterpret_cast<char *>(&temp), sizeof(User));
-
-        if (!infile)
-            break;
-
-        string_view found_username = temp.username;
-        if (username == found_username) {
-            return temp.id;
-        }
-    }
-
-    infile.close();
-
-    return error;
 }
