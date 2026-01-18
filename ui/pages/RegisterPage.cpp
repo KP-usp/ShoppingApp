@@ -1,5 +1,6 @@
 #include "RegisterPage.h"
 #include "SharedComponent.h"
+#include <fstream>
 
 RegisterLayOut::RegisterLayOut(AppContext &ctx,
                                std::function<void()> on_register_success,
