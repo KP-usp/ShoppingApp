@@ -27,11 +27,12 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(json httplib ftxui)
 
-# 寻找系统的底层库
+# 寻找系统中下载的库（加密 + 线程）
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
 add_subdirectory(model_utils)
+add_subdirectory(logger)
 add_subdirectory(model)
 add_subdirectory(ui_utils)
 add_subdirectory(ui)
