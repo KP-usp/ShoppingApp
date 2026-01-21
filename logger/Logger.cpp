@@ -4,6 +4,14 @@
  */
 
 #include "Logger.h"
+#include <chrono>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+
+// 定义静态数据成员
+Logger *Logger::instance = nullptr;
+std::mutex Logger::mutex;
 
 // 静态成员初始化
 Logger::Logger()

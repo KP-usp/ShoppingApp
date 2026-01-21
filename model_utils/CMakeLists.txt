@@ -1,8 +1,9 @@
-# 接口库（只含有头文件）
-add_library(model_utils INTERFACE)
+file(GLOB MODEL_UTILS_SOURCES "*.cpp")
+
+add_library(model_utils STATIC ${MODEL_UTILS_SOURCES})
 
 # 宏定义：定义数据库的路径
 target_compile_definitions(model_utils
-                           INTERFACE DATA_PATH="${PROJECT_SOURCE_DIR}/data")
+                           PUBLIC DATA_PATH="${PROJECT_SOURCE_DIR}/data")
 
-target_include_directories(model_utils INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(model_utils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

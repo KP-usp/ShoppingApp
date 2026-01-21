@@ -33,6 +33,7 @@ find_package(Threads REQUIRED)
 
 add_subdirectory(model_utils)
 add_subdirectory(logger)
+add_subdirectory(database)
 add_subdirectory(model)
 add_subdirectory(ui_utils)
 add_subdirectory(ui)

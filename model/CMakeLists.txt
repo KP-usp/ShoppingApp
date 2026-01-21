@@ -6,37 +6,40 @@ target_include_directories(shopping_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 # -- 寻找 MySQL 库
 
-# 寻找头文件路径
+# 1. 寻找 C++ 驱动的头文件 (通常在 include 或 include/cppconn 下) 关键文件是 mysql_driver.h 或
+#   cppconn/driver.h
 find_path(
-  MYSQL_INCLUDE_DIR
-  NAMES mysql.h
-  PATHS /usr/include/mysql /usr/local/include/mysql)
+  MYSQL_CPP_INCLUDE_DIR
+  NAMES mysql_driver.h mysql_connection.h cppconn/driver.h
+  PATHS /usr/include /usr/local/include /usr/include/mysql-cppconn-8
+  PATH_SUFFIXES cppconn)
 
-# 寻找库文件路径
+# 1. 寻找 C++ 驱动的库文件 (名字是 mysqlcppconn，不是 mysqlclient)
 find_library(
-  MYSQL_LIBRARY
-  NAMES mysqlclient
-  PATHS /usr/lib/x86_64-linux-gnu /usr/local/lib)
+  MYSQL_CPP_LIBRARY
+  NAMES mysqlcppconn
+  PATHS /usr/lib /usr/lib/x86_64-linux-gnu /usr/local/lib)
 
-# 检查是否找到并创建目标
-if(MYSQL_INCLUDE_DIR AND MYSQL_LIBRARY)
-  message(STATUS "Found MySQL Include: ${MYSQL_INCLUDE_DIR}")
-  message(STATUS "Found MySQL Library: ${MYSQL_LIBRARY}")
+# 1. 检查并创建 Target
+if(MYSQL_CPP_INCLUDE_DIR AND MYSQL_CPP_LIBRARY)
+  message(STATUS "Found MySQL Connector/C++ Include: ${MYSQL_CPP_INCLUDE_DIR}")
+  message(STATUS "Found MySQL Connector/C++ Library: ${MYSQL_CPP_LIBRARY}")
 
-  # 创建一个现代 CMake 目标
-  add_library(MySQL::MySQL UNKNOWN IMPORTED)
+  add_library(MySQL::CppConn UNKNOWN IMPORTED)
   set_target_properties(
-    MySQL::MySQL PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${MYSQL_INCLUDE_DIR}"
-                            IMPORTED_LOCATION "${MYSQL_LIBRARY}")
+    MySQL::CppConn
+    PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${MYSQL_CPP_INCLUDE_DIR}"
+               IMPORTED_LOCATION "${MYSQL_CPP_LIBRARY}")
 else()
   message(
     FATAL_ERROR
-      "Could not find libmysqlclient-dev. Install it with: sudo apt install libmysqlclient-dev"
+      "Could not find libmysqlcppconn. Please install it with:\n sudo apt install libmysqlcppconn-dev"
   )
 endif()
 
 # 连接 MySQL 库 和 其他依赖
 target_link_libraries(
   shopping_model
-  PUBLIC logger
-  PRIVATE MySQL::MySQL)
+  PUBLIC model_utils
+  PUBLIC database
+  PRIVATE MySQL::CppConn)
