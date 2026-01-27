@@ -2,201 +2,140 @@
  * @file      ProductManager.cpp
  * @brief     商品管理模块实现文件
  * @details   实现了 ProductManager 类，负责商品信息的全生命周期管理。
- *            包括商品库初始化、商品上架(新增)、下架(删除)、信息修改
- *            以及基于名称的模糊搜索算法实现。
+ *            包括基于名称的模糊搜索和基于 id 精确搜索实现和负责处理储存购物车
+ *            MySQL 表单数据的 CRUD 操作。
  * @author    KP-usp
- * @date      2025-01-7
- * @version   1.0
+ * @date      2025-01-23
+ * @version   2.0
  * @copyright Copyright (c) 2025
  */
 
 #include "ProductManager.h"
-#include "FileHeader.h"
+#include "Database.h"
+#include "Logger.h"
 #include <fstream>
-#include <iostream>
 
-using std::cerr;
-using std::cout;
-using std::endl;
 using std::ifstream;
-using std::ios_base;
 using std::nullopt;
 using std::ofstream;
 using std::optional;
 using std::string;
 using std::string_view;
 
-void ProductManager::init_db_file() {
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, ios_base::binary);
-
-    if (!infile.is_open() || infile.peek() == ifstream::traits_type::eof()) {
-        infile.close();
-
-        // 数据库为空，初始化 id 自增文件头, 这里截断文件没问题
-        ofstream outfile(path, ios_base::binary | ios_base::out);
-        FileHeader header;
-        header.next_id = 1;
-        outfile.write(reinterpret_cast<const char *>(&header),
-                      sizeof(FileHeader));
-        outfile.close();
-    }
-}
-
-int ProductManager::generate_and_update_id() {
-
-    string path = Utils::get_database_path(m_db_filename);
-    std::fstream iofile(path, ios_base::binary | ios_base::in | ios_base::out);
-    if (!iofile.is_open()) {
-        return -1;
+void ProductManager::load_all_product() {
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法加载商品信息到内存。");
     }
 
-    FileHeader header;
-
-    iofile.seekg(0, ios_base::beg);
-    iofile.read(reinterpret_cast<char *>(&header), sizeof(FileHeader));
-
-    int new_id = header.next_id;
-
-    header.next_id++;
-
-    iofile.seekp(0, ios_base::beg);
-    iofile.write(reinterpret_cast<const char *>(&header), sizeof(FileHeader));
-
-    iofile.close();
-    return new_id;
-}
-
-FileErrorCode ProductManager::load_all_product() {
     is_loaded = false;
 
     product_list.clear();
 
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, std::ios_base::binary);
-    if (!infile.is_open()) {
-        cerr << "open" << path << "is failed" << endl;
-        return FileErrorCode::OpenFailure;
-    }
+    try {
+        Database::prepare(
+            "SELECT product_name, product_id, price, stock, status FROM "
+            "products",
+            [this](sql::PreparedStatement *pstmt) {
+                std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+                while (res->next()) {
+                    Product temp;
 
-    Product temp;
-
-    infile.seekg(sizeof(FileHeader), ios_base::beg);
-
-    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(Product))) {
-        product_list.emplace_back(temp);
-    }
-
-    infile.close();
+                    temp.product_name = res->getString("product_name");
+                    temp.product_id = res->getInt("product_id");
+                    temp.price = res->getDouble("price");
+                    temp.stock = res->getInt("stock");
+                    temp.status =
+                        static_cast<ProductStatus>(res->getInt("status"));
+                    product_list.push_back(temp);
+                }
+            });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("加载商品列表到内存失败，" + string(e.what()));
+    };
 
     is_loaded = true;
-
-    return FileErrorCode::OK;
 }
 
-FileErrorCode ProductManager::add_product(const string_view &product_name,
-                                          const double price, const int stock) {
-    int product_id = generate_and_update_id();
-
-    if (product_id == -1)
-        return FileErrorCode::WriteFailure;
-
-    string path = Utils::get_database_path(m_db_filename);
-    ofstream outfile(path, ios_base::binary | ios_base::app);
-    if (!outfile.is_open()) {
-        cerr << "open " << path << " is failed." << endl;
-        return FileErrorCode::OpenFailure;
+void ProductManager::add_product(const string &product_name, const double price,
+                                 const int stock) {
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法添加新商品。");
     }
 
-    Product temp(product_name, price, stock, product_id);
-
-    // 写入逻辑
-    outfile.write(reinterpret_cast<const char *>(&temp), sizeof(Product));
-    if (outfile.fail())
-        return FileErrorCode::WriteFailure;
-
-    outfile.flush();
-    outfile.close();
-    return FileErrorCode::OK;
-
-    return FileErrorCode::WriteFailure;
+    try {
+        std::string sql = "INSERT INTO products (product_name, price, stock) "
+                          "VALUES(?, ?, ?)";
+        Database::prepare(sql, [&product_name, &price,
+                                &stock](sql::PreparedStatement *pstmt) {
+            pstmt->setString(1, product_name);
+            pstmt->setDouble(2, price);
+            pstmt->setInt(3, stock);
+            pstmt->executeUpdate();
+        });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("添加新商品失败: " + std::string(e.what()));
+    }
 }
 
-FileErrorCode ProductManager::delete_product(const int product_id) {
-    string path = Utils::get_database_path(m_db_filename);
-    std::fstream iofile(path, ios_base::in | ios_base::out | ios_base::binary);
-    if (!iofile.is_open()) {
-        cerr << "open " << path << "is failed." << endl;
-        return FileErrorCode::OpenFailure;
+void ProductManager::delete_product(const int product_id) {
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法删除商品。");
     }
 
-    optional<std::streampos> target_position = get_product_pos(product_id);
-    if (!target_position.has_value()) {
-        iofile.close();
-        return FileErrorCode::NotFound;
+    try {
+
+        Database::prepare("UPDATE products SET status = ? WHERE product_id = ?",
+                          [&product_id](sql::PreparedStatement *pstmt) {
+                              pstmt->setInt(
+                                  1, static_cast<int>(ProductStatus::DELETED));
+                              pstmt->setInt(2, product_id);
+                              pstmt->executeUpdate();
+                          });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("删除商品失败: " + std::string(e.what()));
     }
-
-    Product temp;
-
-    iofile.seekg(target_position.value());
-    iofile.read(reinterpret_cast<char *>(&temp), sizeof(Product));
-
-    if (temp.status == ProductStatus::NORMAL) {
-        temp.status = ProductStatus::DELETED;
-    } else {
-        iofile.close();
-        return FileErrorCode::NotFound;
-    }
-    iofile.seekp(target_position.value());
-
-    iofile.write(reinterpret_cast<const char *>(&temp), sizeof(Product));
-
-    iofile.close();
-
-    return FileErrorCode::OK;
 }
 
-FileErrorCode
-ProductManager::update_product(const string_view &new_product_name,
-                               const int product_id, const double new_price,
-                               const int stock) {
-    string path = Utils::get_database_path(m_db_filename);
-    ofstream iofile(path, ios_base::binary | ios_base::out | ios_base::in);
-    if (!iofile.is_open()) {
-        cerr << "open " << path << " is failed." << endl;
-        return FileErrorCode::OpenFailure;
+void ProductManager::restore_product(const int product_id) {
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法恢复商品。");
     }
 
-    optional<std::streampos> target_position = get_product_pos(product_id);
+    try {
+        Database::prepare("UPDATE products SET status = ? WHERE product_id = ?",
+                          [&product_id](sql::PreparedStatement *pstmt) {
+                              pstmt->setInt(
+                                  1, static_cast<int>(ProductStatus::NORMAL));
+                              pstmt->setInt(2, product_id);
+                              pstmt->executeUpdate();
+                          });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("恢复商品失败: " + std::string(e.what()));
+    }
+}
 
-    if (!target_position.has_value()) {
-        iofile.close();
-        cout << "NotFound" << endl;
-        return FileErrorCode::NotFound;
+void ProductManager::update_product(const string &product_name,
+                                    const int product_id, const double price,
+                                    const int stock) {
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法更新商品。");
     }
 
-    iofile.seekp(target_position.value());
-
-    if (iofile.fail()) {
-        cerr << "Write failed." << endl;
-        iofile.close();
-        return FileErrorCode::SeekFailure;
+    try {
+        Database::prepare(
+            "UPDATE products SET product_name = ?, price = ?, stock = ? WHERE "
+            "product_id = ?",
+            [&product_name, &price, &stock,
+             &product_id](sql::PreparedStatement *pstmt) {
+                pstmt->setString(1, product_name);
+                pstmt->setDouble(2, price);
+                pstmt->setInt(3, stock);
+                pstmt->setInt(4, product_id);
+                pstmt->executeUpdate();
+            });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("更新商品失败: " + std::string(e.what()));
     }
-
-    Product temp(new_product_name, new_price, stock, product_id);
-
-    iofile.write(reinterpret_cast<const char *>(&temp), sizeof(Product));
-
-    if (iofile.fail()) {
-        cerr << "Write failed." << endl;
-        iofile.close();
-        return FileErrorCode::WriteFailure;
-    }
-
-    iofile.flush();
-    iofile.close();
-
-    return FileErrorCode::OK;
 }
 
 std::vector<Product>
@@ -230,8 +169,12 @@ ProductManager::search_all_product(const std::string &query) {
                        ::tolower);
 
         // 如果 ID 等于查询串或名称包含查询串
-        if (id_str == query ||
-            name_str.find(lower_query) != std::string::npos) {
+        if (id_str == lower_query) {
+            result.push_back(p);
+            break;
+        }
+
+        if (name_str.find(lower_query) != std::string::npos) {
             result.push_back(p);
         }
     }
@@ -273,132 +216,87 @@ ProductManager::search_product(const std::string &query_name) {
                        ::tolower);
 
         // 如果 ID 等于查询串或名称包含查询串
-        if (id_str == query_name ||
-            name_str.find(lower_query) != std::string::npos) {
+        if (id_str == lower_query) {
+            result.push_back(p);
+            break;
+        }
+
+        if (name_str.find(lower_query) != std::string::npos) {
             result.push_back(p);
         }
     }
     return result;
 }
 
-FileErrorCode ProductManager::restore_product(const int product_id) {
-    string path = Utils::get_database_path(m_db_filename);
-    std::fstream iofile(path, ios_base::in | ios_base::out | ios_base::binary);
-    if (!iofile.is_open()) {
-        cerr << "open " << path << "is failed." << endl;
-        return FileErrorCode::OpenFailure;
-    }
-
-    optional<std::streampos> target_position = get_product_pos(product_id);
-    if (!target_position.has_value()) {
-        iofile.close();
-        return FileErrorCode::NotFound;
-    }
-
-    Product temp;
-
-    iofile.seekg(target_position.value());
-    iofile.read(reinterpret_cast<char *>(&temp), sizeof(Product));
-
-    if (temp.status == ProductStatus::DELETED) {
-        temp.status = ProductStatus::NORMAL;
-    } else {
-        iofile.close();
-        return FileErrorCode::NotFound;
-    }
-    iofile.seekp(target_position.value());
-
-    iofile.write(reinterpret_cast<const char *>(&temp), sizeof(Product));
-
-    iofile.close();
-
-    return FileErrorCode::OK;
-}
-
 std::optional<Product> ProductManager::get_product(const int product_id) {
-    string path = Utils::get_database_path(m_db_filename);
+    auto con = Database::get_connection();
+    if (!con)
+        LOG_ERROR("数据库未连接，无法获取商品信息。");
 
-    ifstream infile(path, ios_base::binary);
-    if (!infile.is_open()) {
+    // 查询结果
+    optional<Product> result = nullopt;
 
-        cerr << "open " << path << "is failed." << endl;
+    try {
+        Database::prepare(
+            "SELECT product_name, price, stock, status FROM products "
+            "WHERE product_id = ?",
+            [&](sql::PreparedStatement *pstmt) {
+                pstmt->setInt(1, product_id);
+                std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 
-        return nullopt;
+                if (res->next() &&
+                    res->getInt("status") ==
+                        static_cast<int>(ProductStatus::NORMAL)) {
+                    Product temp;
+                    temp.product_id = product_id;
+                    temp.product_name = res->getString("product_name");
+                    temp.price = res->getDouble("price");
+                    temp.stock = res->getInt("stock");
+
+                    result = temp;
+                }
+            });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("获取商品信息失败，" + string(e.what()));
     }
 
-    Product temp;
-
-    infile.seekg(sizeof(FileHeader), ios_base::beg);
-
-    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(Product))) {
-
-        if (temp.product_id == product_id &&
-            temp.status != ProductStatus::DELETED) {
-            return temp;
-        }
-    }
-
-    infile.close();
-
-    return nullopt;
+    return result;
 }
 
-const std::optional<int>
-ProductManager::get_id_by_name(const string_view &product_name) {
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, ios_base::binary);
+std::optional<Product>
+ProductManager::get_product(const std::string &product_name) {
+    auto con = Database::get_connection();
+    if (!con)
+        LOG_ERROR("数据库未连接，无法获取商品信息。");
 
-    if (!infile.is_open()) {
+    // 查询结果
+    Product result;
 
-        cerr << "open " << path << "is failed." << endl;
-        return nullopt;
+    try {
+        Database::prepare(
+            "SELECT product_name, product_id, price, stock, status FROM "
+            "products "
+            "WHERE product_name = ?",
+            [&](sql::PreparedStatement *pstmt) {
+                pstmt->setString(1, product_name);
+
+                std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+
+                if (res->next() &&
+                    res->getInt("status") ==
+                        static_cast<int>(ProductStatus::NORMAL)) {
+                    Product temp;
+                    temp.product_id = res->getInt("product_id");
+                    temp.product_name = res->getString("product_name");
+                    temp.price = res->getDouble("price");
+                    temp.stock = res->getInt("stock");
+
+                    result = temp;
+                }
+            });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("获取商品信息失败，" + string(e.what()));
     }
 
-    Product temp;
-
-    while (true) {
-        infile.read(reinterpret_cast<char *>(&temp), sizeof(Product));
-
-        if (!infile)
-            break;
-
-        if (temp.product_name == product_name) {
-            return temp.product_id;
-        }
-    }
-
-    infile.close();
-
-    return nullopt;
-}
-
-optional<std::streampos> ProductManager::get_product_pos(const int product_id) {
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, ios_base::binary);
-    if (!infile.is_open()) {
-
-        cerr << "open " << path << "is failed." << endl;
-        return nullopt;
-    }
-
-    Product temp;
-
-    infile.seekg(sizeof(FileHeader), ios_base::beg);
-
-    while (true) {
-        std::streampos current_pos = infile.tellg();
-
-        infile.read(reinterpret_cast<char *>(&temp), sizeof(Product));
-
-        if (!infile)
-            break;
-
-        if (temp.product_id == product_id) {
-            return current_pos;
-        }
-    }
-
-    infile.close();
-
-    return nullopt;
+    return result;
 }

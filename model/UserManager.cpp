@@ -2,72 +2,26 @@
  * @file      UserManager.cpp
  * @brief     用户管理模块实现文件
  * @details   实现了 User 类和 UserManager 类的核心逻辑，
- *            包括用户数据库的初始化、注册校验、登录验证（哈希比对）、
- *            用户信息修改及文件读写操作。
+ *            包括注册校验、登录验证（哈希比对）、
+ *             负责处理储存在 MySQL 表单的用户数据的CRUD 操作。
  * @author    KP-usp
- * @date      2025-01-7
- * @version   1.0
+ * @date      2025-01-23
+ * @version   2.0
  * @copyright Copyright (c) 2025
  */
 
 #include "UserManager.h"
-#include "FileHeader.h"
+#include "Database.h"
 #include <ctime>
 #include <fstream>
-#include <iostream>
 #include <optional>
 #include <string>
 
-using std::cerr;
-using std::cout;
-using std::endl;
 using std::ifstream;
-using std::ios_base;
 using std::nullopt;
 using std::ofstream;
 using std::optional;
 using std::string;
-
-void UserManager::init_db_file() {
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, ios_base::binary);
-
-    if (!infile.is_open() || infile.peek() == ifstream::traits_type::eof()) {
-        infile.close();
-
-        // 数据库为空，初始化 id 自增文件头, 这里截断文件没问题
-        ofstream outfile(path, ios_base::binary | ios_base::out);
-        FileHeader header;
-        header.next_id = 1;
-        outfile.write(reinterpret_cast<const char *>(&header),
-                      sizeof(FileHeader));
-        outfile.close();
-    }
-}
-
-int UserManager::generate_and_update_id() {
-
-    string path = Utils::get_database_path(m_db_filename);
-    std::fstream iofile(path, ios_base::binary | ios_base::in | ios_base::out);
-    if (!iofile.is_open()) {
-        return -1;
-    }
-
-    FileHeader header;
-
-    iofile.seekg(0, ios_base::beg);
-    iofile.read(reinterpret_cast<char *>(&header), sizeof(FileHeader));
-
-    int new_id = header.next_id;
-
-    header.next_id++;
-
-    iofile.seekp(0, ios_base::beg);
-    iofile.write(reinterpret_cast<const char *>(&header), sizeof(FileHeader));
-
-    iofile.close();
-    return new_id;
-}
 
 Result UserManager::check_login(const string &username,
                                 const string &input_password) {
@@ -76,15 +30,18 @@ Result UserManager::check_login(const string &username,
 
     if (user_opt.has_value()) {
         User user = user_opt.value();
+
         if (check_password(input_password, string(user.password)) ==
             Result::SUCCESS) {
             active_user =
                 std::make_shared<User>(user.username, user.password,
                                        user.is_admin, user.id, user.status);
+            Logger::LOG_INFO("用户登录成功，用户名: " + username);
             return Result::SUCCESS;
         }
     }
 
+    Logger::LOG_INFO("用户登录失败，用户名: " + username);
     return Result::FAILURE;
 }
 
@@ -144,260 +101,213 @@ Result UserManager::check_register(const string &username,
     User temp(username, hash_password, false);
     append_user(temp);
 
+    Logger::LOG_INFO("用户注册成功，用户名: " + username);
     return Result::SUCCESS;
 }
 
-FileErrorCode UserManager::append_user(const User &new_user) {
-    // 生成新的 ID
-    int new_id = generate_and_update_id();
-    if (new_id == -1)
-        return FileErrorCode::OpenFailure;
-
-    User user_to_save = new_user;
-    user_to_save.id = new_id;
-
-    string path = Utils::get_database_path(m_db_filename);
-
-    //  将用户写入文件末尾
-    ofstream outfile(path, ios_base::binary | ios_base::app);
-    if (!outfile.is_open()) {
-        cerr << "open " << path << " is failed." << endl;
-        return FileErrorCode::OpenFailure;
+void UserManager::append_user(const User &new_user) {
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法添加新用户。");
     }
 
-    outfile.write(reinterpret_cast<const char *>(&user_to_save), sizeof(User));
+    string username = string(new_user.username);
+    string password = string(new_user.password);
+    bool is_admin = new_user.is_admin;
 
-    if (outfile.fail())
-        return FileErrorCode::WriteFailure;
-
-    outfile.flush();
-    outfile.close();
-    return FileErrorCode::OK;
+    try {
+        std::string sql = "INSERT INTO users (username, password, is_admin) "
+                          "VALUES(?, ?, ?)";
+        Database::prepare(sql, [&username, &password,
+                                &is_admin](sql::PreparedStatement *pstmt) {
+            pstmt->setString(1, username);
+            pstmt->setString(2, password);
+            pstmt->setBoolean(3, is_admin);
+            pstmt->executeUpdate();
+        });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("添加新用户失败: " + std::string(e.what()));
+    }
 }
 
-FileErrorCode UserManager::update_user(const User &new_user) {
-
-    string path = Utils::get_database_path(m_db_filename);
-    ofstream iofile(path, ios_base::binary | ios_base::out | ios_base::in);
-    if (!iofile.is_open()) {
-        cerr << "open " << path << " is failed." << endl;
-        return FileErrorCode::OpenFailure;
+void UserManager::update_user(const int id, const string username,
+                              const string password, const bool is_admin) {
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法更新用户。");
     }
 
-    optional<streampos> target_position = get_user_pos(new_user.id);
-
-    if (!target_position.has_value()) {
-        iofile.close();
-        cout << "NotFound" << endl;
-        return FileErrorCode::NotFound;
+    try {
+        Database::prepare(
+            "UPDATE users SET username = ?, password = ?, is_admin = ? WHERE "
+            "id = ?",
+            [&username, &password, &is_admin,
+             &id](sql::PreparedStatement *pstmt) {
+                pstmt->setString(1, username);
+                pstmt->setString(2, password);
+                pstmt->setBoolean(3, is_admin);
+                pstmt->setInt(4, id);
+                pstmt->executeUpdate();
+            });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("更新用户失败: " + std::string(e.what()));
     }
-
-    iofile.seekp(target_position.value());
-
-    if (iofile.fail()) {
-        cerr << "Write failed." << endl;
-        iofile.close();
-        return FileErrorCode::SeekFailure;
-    }
-
-    iofile.write(reinterpret_cast<const char *>(&new_user), sizeof(User));
-
-    if (iofile.fail()) {
-        cerr << "Write failed." << endl;
-        iofile.close();
-        return FileErrorCode::WriteFailure;
-    }
-
-    iofile.flush();
-    iofile.close();
-
-    return FileErrorCode::OK;
 }
 
-optional<User> UserManager::get_user_by_name(const string_view &username) {
+optional<User> UserManager::get_user_by_name(const string &username) {
+    auto con = Database::get_connection();
+    if (!con)
+        LOG_ERROR("数据库未连接，无法获取用户信息。");
 
-    string path = Utils::get_database_path(m_db_filename);
+    // 查询结果
+    optional<User> result = nullopt;
 
-    ifstream infile(path, ios_base::binary);
-    if (!infile.is_open()) {
+    try {
+        Database::prepare(
+            "SELECT id, username, password, is_admin FROM users "
+            "WHERE username = ? ",
+            [&](sql::PreparedStatement *pstmt) {
+                pstmt->setString(1, username);
+                std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+                if (res->next()) {
+                    User temp;
+                    temp.id = res->getInt("id");
+                    temp.username = string(res->getString("username"));
+                    temp.password = string(res->getString("password"));
+                    temp.is_admin = res->getBoolean("is_admin");
 
-        cerr << "open " << path << "is failed." << endl;
-        return nullopt;
+                    result = temp;
+                }
+            });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("根据用户名获取用户信息失败，" + string(e.what()));
     }
-
-    User temp;
-
-    infile.seekg(sizeof(FileHeader), ios_base::beg);
-
-    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(User))) {
-        string_view found_username = temp.username;
-        if (username == found_username && temp.status == UserStatus::NORMAL) {
-            return temp;
-        }
-    }
-
-    infile.close();
-
-    return nullopt;
-}
-
-std::optional<User> UserManager::get_user_by_id(const int user_id) {
-    string path = Utils::get_database_path(m_db_filename);
-
-    ifstream infile(path, ios_base::binary);
-    if (!infile.is_open()) {
-
-        cerr << "open " << path << "is failed." << endl;
-        return nullopt;
-    }
-
-    User temp;
-
-    infile.seekg(sizeof(FileHeader), ios_base::beg);
-
-    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(User))) {
-
-        if (user_id == temp.id && temp.status == UserStatus::NORMAL) {
-            return temp;
-        }
-    }
-
-    infile.close();
-
-    return nullopt;
-}
-
-std::vector<User> UserManager::search_users_list(const string &query) {
-    std::vector<User> result;
-
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, ios_base::binary);
-    if (!infile.is_open()) {
-        return result;
-    }
-
-    User temp;
-
-    string low_query = query;
-
-    std::transform(low_query.begin(), low_query.end(), low_query.begin(),
-                   ::tolower);
-    infile.seekg(sizeof(FileHeader), ios_base::beg);
-
-    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(User))) {
-
-        if (query.empty()) {
-            result.push_back(temp);
-            continue;
-        }
-
-        string user_id_str = std::to_string(temp.id);
-        string username_str = string(temp.username);
-
-        if (user_id_str == low_query ||
-            username_str.find(low_query) != string::npos)
-            result.push_back(temp);
-    }
-
-    infile.close();
 
     return result;
 }
 
-FileErrorCode UserManager::delete_user(const int user_id) {
+std::optional<User> UserManager::get_user_by_id(const int user_id) {
+    auto con = Database::get_connection();
+    if (!con)
+        LOG_ERROR("数据库未连接，无法获取用户信息。");
 
-    string path = Utils::get_database_path(m_db_filename);
-    std::fstream iofile(path, ios_base::in | ios_base::out | ios_base::binary);
-    if (!iofile.is_open()) {
-        cerr << "open " << path << "is failed." << endl;
-        return FileErrorCode::OpenFailure;
+    // 查询结果
+    optional<User> result = nullopt;
+
+    try {
+        std::string sql = "SELECT id, username, password, is_admin FROM users "
+                          "WHERE id = ?";
+        Database::prepare(sql, [&](sql::PreparedStatement *pstmt) {
+            pstmt->setInt(1, user_id);
+
+            std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+            if (res->next()) {
+                User temp;
+                temp.id = res->getInt("id");
+                temp.username = string(res->getString("username"));
+                temp.password = string(res->getString("password"));
+                temp.is_admin = res->getBoolean("is_admin");
+
+                result = temp;
+            }
+        });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("根据用户 id 获取用户信息失败，" + string(e.what()));
     }
 
-    User temp;
-
-    optional<streampos> target_position = get_user_pos(user_id);
-    if (!target_position.has_value()) {
-        iofile.close();
-        return FileErrorCode::NotFound;
-    }
-
-    iofile.seekg(target_position.value());
-    iofile.read(reinterpret_cast<char *>(&temp), sizeof(User));
-
-    if (temp.status == UserStatus::NORMAL) {
-        temp.status = UserStatus::DELETED;
-    } else {
-        iofile.close();
-        return FileErrorCode::NotFound;
-    }
-    iofile.seekp(target_position.value());
-
-    iofile.write(reinterpret_cast<const char *>(&temp), sizeof(User));
-
-    iofile.close();
-
-    return FileErrorCode::OK;
+    return result;
 }
 
-FileErrorCode UserManager::restore_user(const int user_id) {
-    string path = Utils::get_database_path(m_db_filename);
-    std::fstream iofile(path, ios_base::in | ios_base::out | ios_base::binary);
-    if (!iofile.is_open()) {
-        cerr << "open " << path << "is failed." << endl;
-        return FileErrorCode::OpenFailure;
-    }
+std::vector<User> UserManager::search_users_list(const string &query) {
+    auto con = Database::get_connection();
+    if (!con)
+        LOG_ERROR("数据库未连接，无法搜索用户列表。");
 
-    optional<streampos> target_position = get_user_pos(user_id);
-    if (!target_position.has_value()) {
-        iofile.close();
-        return FileErrorCode::NotFound;
-    }
+    // 搜索结果
+    std::vector<User> result;
 
-    User temp;
-    iofile.seekg(target_position.value());
-    iofile.read(reinterpret_cast<char *>(&temp), sizeof(User));
+    try {
+        Database::prepare(
+            "SELECT id, username, password, is_admin, status FROM users",
+            [&query, &result](sql::PreparedStatement *pstmt) {
+                std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+                while (res->next()) {
+                    User temp;
 
-    // 只有状态为 DELETED 才恢复
-    if (temp.status == UserStatus::DELETED) {
-        temp.status = UserStatus::NORMAL;
-    } else {
-        iofile.close();
-        return FileErrorCode::NotFound;
-    }
+                    if (query.empty()) {
+                        temp.id = res->getInt("id");
+                        temp.username = res->getString("username");
+                        temp.password = res->getString("password");
+                        temp.is_admin = res->getBoolean("is_admin");
+                        temp.status =
+                            static_cast<UserStatus>(res->getInt("status"));
+                        result.push_back(temp);
+                        continue;
+                    }
 
-    iofile.seekp(target_position.value());
-    iofile.write(reinterpret_cast<const char *>(&temp), sizeof(User));
-    iofile.close();
+                    string low_query = query;
 
-    return FileErrorCode::OK;
+                    std::transform(low_query.begin(), low_query.end(),
+                                   low_query.begin(), ::tolower);
+
+                    temp.id = res->getInt("id");
+                    temp.username = string(res->getString("username"));
+                    temp.password = string(res->getString("password"));
+                    temp.is_admin = res->getBoolean("is_admin");
+                    temp.status =
+                        static_cast<UserStatus>(res->getInt("status"));
+
+                    string user_id_str = std::to_string(temp.id);
+                    string username_str = string(temp.username);
+
+                    if (user_id_str == low_query) {
+                        result.push_back(temp);
+                        break;
+                    }
+
+                    if (username_str.find(low_query) != string::npos) {
+                        result.push_back(temp);
+                    }
+                }
+            });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("搜索用户列表失败，" + string(e.what()));
+    };
+    return result;
 }
 
-optional<std::streampos> UserManager::get_user_pos(const int id) {
-
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, ios_base::binary);
-    if (!infile.is_open()) {
-
-        cerr << "open " << path << "is failed." << endl;
-        return nullopt;
+void UserManager::delete_user(const int user_id) {
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法删除用户。");
     }
 
-    User temp;
+    try {
 
-    infile.seekg(sizeof(FileHeader), ios_base::beg);
+        Database::prepare("UPDATE users SET status = ? WHERE id = ?",
+                          [&user_id](sql::PreparedStatement *pstmt) {
+                              pstmt->setInt(
+                                  1, static_cast<int>(UserStatus::DELETED));
+                              pstmt->setInt(2, user_id);
+                              pstmt->executeUpdate();
+                          });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("删除用户失败: " + std::string(e.what()));
+    }
+}
 
-    streampos record_start_pos = infile.tellg();
+void UserManager::restore_user(const int user_id) {
 
-    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(User))) {
-
-        if (temp.id == id) {
-            return record_start_pos;
-        }
-
-        record_start_pos = infile.tellg();
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法恢复用户。");
     }
 
-    infile.close();
+    try {
 
-    return nullopt;
+        Database::prepare("UPDATE users SET status = ? WHERE id = ?",
+                          [&user_id](sql::PreparedStatement *pstmt) {
+                              pstmt->setInt(1, 0);
+                              pstmt->setInt(2, user_id);
+                              pstmt->executeUpdate();
+                          });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("恢复用户失败: " + std::string(e.what()));
+    }
 }

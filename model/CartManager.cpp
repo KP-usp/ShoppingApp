@@ -3,250 +3,180 @@
  * @brief     购物车管理模块实现文件
  * @details   实现了 CartManager 类的功能，包括购物车数据的加载、
  *            商品添加/删除/更新、库存检查预备逻辑以及结算数据打包。
- *            负责处理购物车二进制文件的 CRUD 操作。
+ *            负责处理储存在 MySQL 表单的购物车数据的CRUD 操作。
  * @author    KP-usp
- * @date      2025-01-7
+ * @date      2025-01-23
  * @version   1.0
  * @copyright Copyright (c) 2025
  */
 
 #include "CartManager.h"
-#include <fstream>
-#include <iostream>
+#include "Database.h"
 
-using std::cerr;
-using std::endl;
-using std::ifstream;
-using std::ios_base;
-using std::ofstream;
 using std::string;
 using std::string_view;
 
-FileErrorCode CartManager::load_cart(const int user_id) {
+void CartManager::load_cart(const int user_id) {
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法加载商品信息到内存。");
+    }
+
     // 状态清空
     is_loaded = false;
     cart_list.clear();
 
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, std::ios_base::binary);
-    if (!infile.is_open()) {
-        cerr << "open" << path << "is failed" << endl;
-        return FileErrorCode::OpenFailure;
-    }
+    try {
+        Database::prepare(
+            "SELECT user_id, product_id, count, status, "
+            "delivery_selection FROM carts ",
+            [this](sql::PreparedStatement *pstmt) {
+                std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
 
-    CartItem temp;
+                while (res->next()) {
+                    if (static_cast<int>(CartItemStatus::NOT_ORDERED) !=
+                        res->getInt("status")) {
+                        continue;
+                    }
 
-    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(CartItem))) {
-        if (temp.status == CartItemStatus::NOT_ORDERED) {
-            cart_list.emplace_back(temp);
-        }
-    }
+                    CartItem temp;
 
-    infile.close();
+                    temp.id = res->getInt("user_id");
+                    temp.product_id = res->getInt("product_id");
+                    temp.count = res->getInt("count");
+                    temp.delivery_selection = res->getInt("delivery_selection");
+                    temp.status =
+                        static_cast<CartItemStatus>(res->getInt("status"));
+                    cart_list.push_back(temp);
+                }
+            });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("加载购物车列表到内存失败，" + string(e.what()));
+    };
 
     is_loaded = true;
-
-    return FileErrorCode::OK;
 }
 
-std::pair<std::streampos, CartItem>
-CartManager::find_item(const int user_id, const int product_id,
-                       std::vector<CartItemStatus> target_status) {
+void CartManager::add_item(const int user_id, const int product_id,
+                           const int count) {
 
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, ios_base::binary);
-    if (!infile.is_open()) {
-
-        cerr << "open " << path << "is failed." << endl;
-        return {-1, {}}; // 表示没找到(不管原因)
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法添加新商品。");
     }
 
-    CartItem temp;
-
-    while (infile.read(reinterpret_cast<char *>(&temp), sizeof(CartItem))) {
-
-        if (temp.id == user_id && temp.product_id == product_id) {
-            for (auto s : target_status) {
-                if (temp.status == s) {
-                    auto file_pos =
-                        infile.tellg() - (std::streamoff)sizeof(CartItem);
-
-                    return {file_pos, temp};
-                }
-            }
-        }
+    try {
+        // 添加商品，若存在则更新数量
+        std::string sql =
+            "INSERT INTO carts (user_id, product_id, count, status) VALUES (?, "
+            "?, ?, ?) "
+            "ON DUPLICATE KEY UPDATE count = count + VALUES(count) ";
+        Database::prepare(sql, [&user_id, &product_id,
+                                &count](sql::PreparedStatement *pstmt) {
+            pstmt->setInt(1, user_id);
+            pstmt->setInt(2, product_id);
+            pstmt->setInt(3, count);
+            pstmt->setInt(4, static_cast<int>(CartItemStatus::NOT_ORDERED));
+            pstmt->executeUpdate();
+        });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("添加新商品失败: " + std::string(e.what()));
     }
-
-    infile.close();
-
-    return {-1, {}};
 }
 
-FileErrorCode CartManager::add_item(const int user_id, const int product_id,
-                                    const int count) {
-
-    auto [pos_not_ordered, item_not_ordered] =
-        find_item(user_id, product_id, {CartItemStatus::NOT_ORDERED});
-
-    if (pos_not_ordered != -1) {
-        // 有相同类型的已下单商品, 合并数量
-        int new_count = item_not_ordered.count + count;
-
-        CartItem new_item = item_not_ordered;
-        new_item.count = new_count;
-        update_item_at_pos(pos_not_ordered, new_item);
-        return FileErrorCode::OK;
+void CartManager::update_item(const int user_id, const int product_id,
+                              const int count, const int delivery_selection) {
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法更新购物车商品。");
     }
 
-    auto [pos_deleted, item_deleted] =
-        find_item(user_id, product_id, {CartItemStatus::DELETED});
+    try {
+        Database::prepare(
+            "UPDATE carts SET count = ?, delivery_selection = ? WHERE "
+            " user_id = ? AND product_id = ? AND status = ?",
+            [&](sql::PreparedStatement *pstmt) {
+                pstmt->setInt(1, count);
+                pstmt->setInt(2, delivery_selection);
+                pstmt->setInt(3, user_id);
+                pstmt->setInt(4, product_id);
+                pstmt->setInt(5, static_cast<int>(CartItemStatus::NOT_ORDERED));
 
-    if (pos_deleted != -1) {
-        // 有相同类型的已删除商品，覆盖原来的数量并更新状态
-        CartItem new_item = item_deleted;
-        new_item.status = CartItemStatus::NOT_ORDERED;
-        new_item.count = count;
-        update_item_at_pos(pos_deleted, new_item);
-        return FileErrorCode::OK;
+                pstmt->executeUpdate();
+            });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("更新购物车商品失败: " + std::string(e.what()));
     }
-
-    // 若没有同类型的商品，直接写在数据库末尾
-    string path = Utils::get_database_path(m_db_filename);
-    ofstream outfile(path, ios_base::binary | ios_base::app);
-    if (!outfile.is_open()) {
-        cerr << "open " << path << " is failed." << endl;
-        return FileErrorCode::OpenFailure;
-    }
-
-    CartItem temp(user_id, product_id, count); // 默认状态是未下单和未选择
-
-    outfile.write(reinterpret_cast<const char *>(&temp), sizeof(CartItem));
-
-    if (outfile.fail())
-        return FileErrorCode::WriteFailure;
-
-    outfile.flush();
-    outfile.close();
-    return FileErrorCode::OK;
 }
 
-FileErrorCode CartManager::update_item_at_pos(std::streampos pos,
-                                              const CartItem &item) {
-    string path = Utils::get_database_path(m_db_filename);
-
-    std::fstream iofile(path, ios_base::binary | ios_base::in | ios_base::out);
-
-    if (!iofile.is_open()) {
-        return FileErrorCode::OpenFailure;
+void CartManager::delete_item(const int user_id, const int product_id) {
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法删除购物车商品。");
     }
 
-    iofile.seekp(pos);
-    iofile.write(reinterpret_cast<const char *>(&item), sizeof(CartItem));
+    try {
+        // 软删除结账后的购物车商品
+        Database::prepare(
+            "DELETE FROM carts WHERE user_id = ? AND product_id = ? "
+            "AND status = ? ",
+            [&](sql::PreparedStatement *pstmt) {
+                pstmt->setInt(1, user_id);
+                pstmt->setInt(2, product_id);
+                pstmt->setInt(3, static_cast<int>(CartItemStatus::DELETED));
+                pstmt->executeUpdate();
+            });
 
-    if (iofile.fail())
-        return FileErrorCode::WriteFailure;
-
-    iofile.close();
-    return FileErrorCode::OK;
-}
-
-FileErrorCode CartManager::update_item(const int user_id, const int product_id,
-                                       const int count,
-                                       const CartItemStatus status,
-                                       const int delivery_selection) {
-
-    auto [file_pos, item] = find_item(user_id, product_id, {status});
-
-    if (file_pos == -1)
-        return FileErrorCode::NotFound;
-
-    string path = Utils::get_database_path(m_db_filename);
-    ofstream iofile(path, ios_base::binary | ios_base::out | ios_base::in);
-    if (!iofile.is_open()) {
-        cerr << "open " << path << " is failed." << endl;
-        return FileErrorCode::OpenFailure;
+        Database::prepare(
+            "UPDATE carts SET status = ? WHERE user_id = ? AND product_id = ? ",
+            [&user_id, &product_id](sql::PreparedStatement *pstmt) {
+                pstmt->setInt(1, static_cast<int>(CartItemStatus::DELETED));
+                pstmt->setInt(2, user_id);
+                pstmt->setInt(3, product_id);
+                pstmt->executeUpdate();
+            });
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("删除购物车商品失败: " + std::string(e.what()));
     }
-    iofile.seekp(file_pos);
-
-    if (iofile.fail()) {
-        cerr << "Write failed." << endl;
-        iofile.close();
-        return FileErrorCode::SeekFailure;
-    }
-
-    CartItem temp(user_id, product_id, count, status, delivery_selection);
-
-    iofile.write(reinterpret_cast<const char *>(&temp), sizeof(CartItem));
-
-    if (iofile.fail()) {
-        cerr << "Write failed." << endl;
-        iofile.close();
-        return FileErrorCode::WriteFailure;
-    }
-
-    iofile.flush();
-    iofile.close();
-
-    return FileErrorCode::OK;
-}
-
-FileErrorCode CartManager::delete_item(const int user_id,
-                                       const int product_id) {
-
-    auto [file_pos, item] =
-        find_item(user_id, product_id, {CartItemStatus::NOT_ORDERED});
-
-    if (file_pos == -1)
-        return FileErrorCode::NotFound;
-
-    string path = Utils::get_database_path(m_db_filename);
-    std::ofstream outfile(path,
-                          ios_base::out | ios_base::binary | ios_base::in);
-    if (!outfile.is_open()) {
-        cerr << "open " << path << "is failed." << endl;
-        return FileErrorCode::OpenFailure;
-    }
-
-    CartItem temp(user_id, product_id, item.count, CartItemStatus::DELETED);
-
-    outfile.seekp(file_pos);
-
-    outfile.write(reinterpret_cast<const char *>(&temp), sizeof(CartItem));
-
-    outfile.close();
-
-    return FileErrorCode::OK;
 }
 
 std::vector<CartItem> CartManager::checkout(int user_id) {
-
-    string path = Utils::get_database_path(m_db_filename);
-    std::fstream iofile(path, ios_base::binary | ios_base::out | ios_base::in);
-    if (!iofile.is_open()) {
-        cerr << "open " << path << " is failed." << endl;
-        return {}; // 表示不能找到(暂且不管原因)
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法加载结账商品。");
     }
 
-    CartItem item;
+    // 返回给订单类生成订单和历史订单
     std::vector<CartItem> items;
 
-    while (iofile.read(reinterpret_cast<char *>(&item), sizeof(CartItem))) {
-        // 订单需要添加未下单但是已经勾选的商品
-        if (item.id == user_id && item.status == CartItemStatus::NOT_ORDERED &&
-            item.delivery_selection != -1) {
-            items.push_back(item);
+    // 要删除的商品 id
+    std::vector<int> product_ids_to_delete;
 
-            auto current_pos = iofile.tellg();
-            auto item_head_pos = current_pos - (std::streamoff)sizeof(CartItem);
+    try {
+        // 结账已勾选、未软删除的商品
+        Database::prepare(
+            "SELECT user_id, product_id, count, delivery_selection FROM carts "
+            " WHERE user_id = ? AND status = ? AND delivery_selection != ?",
+            [&](sql::PreparedStatement *pstmt) {
+                pstmt->setInt(1, user_id);
+                pstmt->setInt(2, static_cast<int>(CartItemStatus::NOT_ORDERED));
+                pstmt->setInt(3, -1); // 筛选出勾选的商品
 
-            item.status = CartItemStatus::DELETED;
-            item.delivery_selection = -1;
+                std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+                while (res->next()) {
+                    CartItem temp;
 
-            iofile.seekp(item_head_pos);
-            iofile.write(reinterpret_cast<const char *>(&item),
-                         sizeof(CartItem));
-        }
-    }
+                    temp.id = res->getInt("user_id");
+                    temp.product_id = res->getInt("product_id");
+                    temp.count = res->getInt("count");
+                    temp.delivery_selection = res->getInt("delivery_selection");
+
+                    product_ids_to_delete.push_back(temp.product_id);
+                    items.push_back(temp);
+                }
+            });
+
+        for (auto &product_id : product_ids_to_delete)
+            delete_item(user_id, product_id);
+
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("结账商品失败" + string(e.what()));
+    };
 
     return items;
 }

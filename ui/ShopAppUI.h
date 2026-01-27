@@ -13,11 +13,7 @@
 #include "ftxui/component/screen_interactive.hpp"
 #include <atomic>
 #include <ftxui/dom/elements.hpp>
-#include <iostream>
 #include <thread>
-
-using std::cout;
-using std::endl;
 
 using namespace ftxui;
 
@@ -201,7 +197,7 @@ class ShopAppUI {
 
             return false;
             // if (event == Event::Character('1')) {
-            //     tab_index = 2; // 待完善
+            //     tab_index = 2;
             // }
             // return false;
         });

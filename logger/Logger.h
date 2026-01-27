@@ -7,11 +7,9 @@
 
 #pragma once
 
-#include <FileError.h>
 #include <fstream>
 #include <mutex>
 #include <string>
-#include <string_view>
 
 /**
  * @brief 日志级别枚举
@@ -109,19 +107,6 @@ class Logger {
      */
     void log(LogLevel level, const std::string &message,
              const std::string &file = "", int line = 0);
-
-    /**
-     * @brief 记录 FileErrorCode 相关错误
-     *
-     * 将 FileErrorCode 转换为可读的错误消息并记录
-     *
-     * @param error 文件错误码
-     * @param context 错误发生的上下文信息
-     * @param file 源文件名 (可选)
-     * @param line 源代码行号 (可选)
-     */
-    void log_error(FileErrorCode error, const std::string &context,
-                   const std::string &file = "", int line = 0);
 
     /**
      * @brief 设置最低记录级别

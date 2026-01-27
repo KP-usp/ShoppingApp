@@ -70,17 +70,15 @@ void UserManageLayOut::init_page(
             }
 
             //  保存
-            FileErrorCode code = ctx.user_manager.update_user(current_user);
+            ctx.user_manager.update_user(current_user.id, current_user.username,
+                                         current_user.password,
+                                         current_user.is_admin);
 
-            if (code == FileErrorCode::OK) {
-                status_msg = "";
-                edit_password = ""; // 清空敏感信息
-                refresh_list(ctx, list_container, back_dashboard);
-                refresh_user_manage_page();
-                show_popup = 0;
-            } else {
-                status_msg = "数据库写入失败";
-            }
+            status_msg = "";
+            edit_password = ""; // 清空敏感信息
+            refresh_list(ctx, list_container, back_dashboard);
+            refresh_user_manage_page();
+            show_popup = 0;
         },
         ButtonOption::Animated(Color::Green));
 
@@ -234,7 +232,6 @@ void UserManageLayOut::refresh_list(AppContext &ctx, Component list_container,
 
     //  搜索到的数据
     auto users = ctx.user_manager.search_users_list(search_query);
-    std::string path = "data/debug.log";
 
     if (users.empty()) {
         list_container->Add(Renderer([] {

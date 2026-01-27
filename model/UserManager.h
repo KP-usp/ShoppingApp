@@ -6,8 +6,8 @@
  */
 
 #pragma once
-#include "FileError.h"
-#include "FixedString.h"
+
+#include "Logger.h"
 #include "Result.h"
 #include "SecurityUtils.h"
 #include <Utils.h>
@@ -43,15 +43,16 @@ class User {
 
     int id;
 
-    FixedString<MAX_USERNAME_SIZE> username;
+    std::string username;
 
-    FixedString<HASH_PASSWORD_SIZE> password;
+    std::string password;
 
     bool is_admin;
 
     UserStatus status;
 
     User() {};
+
     User(const std::string_view &username, const std::string_view &password,
          const bool role_opt = false, const int user_id = -1,
          const UserStatus status = UserStatus::NORMAL)
@@ -66,28 +67,14 @@ class User {
  *
  */
 class UserManager {
-  public:
-    static constexpr size_t MAX_FILENAME_LENGTH = 64 + 1;
 
   private:
     using string_view = std::string_view;
     using streampos = std::streampos;
     using string = std::string;
 
-    // 存储 User 数据库文件
-    string m_db_filename;
-
     // 当前激活的用户
     std::shared_ptr<User> active_user = nullptr;
-
-    // 初始化数据库，向数据库写入文件头（方便为用户生成 ID）
-    void init_db_file();
-
-    // 生成 ID 并更新文件
-    int generate_and_update_id();
-
-    // 查询用户对象块在数据库文件流中的位置(streampos)
-    std::optional<streampos> get_user_pos(const int id);
 
     // 检查用户名格式
     Result is_valid_username_format(const string &username,
@@ -104,16 +91,12 @@ class UserManager {
 
   public:
     /**
-     * @brief  初始化类对象和用户数据库文件
+     * @brief  初始化类对象
      *
-     * 向文件写入文件头（携带 ID 数据, 方便为每一个用户生成 ID）
-     *
-     * @param db_filename 用户数据库文件名
+     * @param   无参数
      * @return   无返回值
      */
-    UserManager(const string_view &db_filename) : m_db_filename(db_filename) {
-        init_db_file();
-    }
+    UserManager() = default;
 
     /**
      * @brief 验证用户登录
@@ -159,10 +142,16 @@ class UserManager {
      * @brief 获取当前激活的用户
      *
      * @param 无参数
-     * @return  Result 成功返回 Result::SUCCESS，失败返回 Result::FAILURE
+     * @return  active_user 返回当前用户指针
      * @note 这里存储到数据库中密码是经过哈希加密后的密码
      */
-    std::shared_ptr<User> get_current_user() { return active_user; }
+    std::shared_ptr<User> get_current_user() {
+        if (active_user)
+            return active_user;
+        else
+            LOG_CRITICAL("当前 usermanager 没有持有用户");
+        return nullptr;
+    }
 
     /**
      * @brief 当前激活用户注销
@@ -176,30 +165,34 @@ class UserManager {
      * @brief 添加新用户
      *
      * @param new_user 新用户对象
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS，失败返回相应错误码
+     * @return 无返回值
      */
-    FileErrorCode append_user(const User &new_user);
+    void append_user(const User &new_user);
 
     /**
      * @brief 更新用户信息
      *
      * 更新用户的信息（密码、角色等）
      *
-     * @param new_user 用户对象
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS，失败返回相应错误码
+     * @param id 用户 id
+     * @param username 用户名
+     * @param password 用户密码
+     * @param is_admin 是否有管理权限
+     * @return 无返回值
      */
-    FileErrorCode update_user(const User &new_user);
+    void update_user(const int id, const string username, const string password,
+                     const bool is_admin);
 
     /**
-     * @brief 根据用户名获取用户对象
+     * @brief 根据用户名获取用户对象(正常状态)
      *
      * @param  username 用户名
      * @return optional<User>  成功：用户对象（），失败：nullopt
      */
-    std::optional<User> get_user_by_name(const string_view &username);
+    std::optional<User> get_user_by_name(const string &username);
 
     /**
-     * @brief 根据用户 id， 获取用户对象
+     * @brief 根据用户 id， 获取用户对象（正常状态）
      *
      * @param  user_id  用户 ID
      * @return optional<User>  成功：用户对象（），失败：nullopt
@@ -221,17 +214,17 @@ class UserManager {
      * 对商品进行软删除（修改状态为 DELETED），而非物理删除。
      *
      * @param  user_id  用户 ID
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS，失败返回相应错误码
+     * @return 无返回参数
      */
-    FileErrorCode delete_user(const int user_id);
+    void delete_user(const int user_id);
 
     /**
      * @brief 根据用户 id，恢复数据库用户数据（添加正常标志）
      *
      * @param  user_id  用户 ID
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS，失败返回相应错误码
+     * @return 无返回参数
      */
-    FileErrorCode restore_user(const int user_id);
+    void restore_user(const int user_id);
 
     // 析构器
     ~UserManager() {};

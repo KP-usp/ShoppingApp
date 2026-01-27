@@ -6,11 +6,10 @@
  */
 
 #pragma once
-#include "FileError.h"
+#include "Logger.h"
 #include <Utils.h>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 /**
@@ -18,7 +17,7 @@
  *
  * 标识商品是在购物车中等待下单，还是已被逻辑删除
  */
-enum class CartItemStatus {
+enum class CartItemStatus : int {
     NOT_ORDERED = 0, ///< 未下单（在购物车中）
     DELETED = -1,    ///< 已删除
 };
@@ -55,31 +54,18 @@ struct CartItem {
  */
 class CartManager {
   private:
-    // 存储购物车数据的数据库文件名
-    std::string m_db_filename;
-
     // 内存缓存：从数据库中导出的该用户未下单的购物车商品列表
     std::vector<CartItem> cart_list;
 
     // 标志位：当前用户的购物车数据是否已加载到内存
     bool is_loaded = false;
 
-    // 辅助函数：将购物车条目状态标记为已删除
-    void mark_deleted(CartItem &cart_item) {
-        cart_item.status = CartItemStatus::DELETED;
-    }
-
-    // 辅助函数：根据文件流位置更新记录，不负责查找逻辑
-    FileErrorCode update_item_at_pos(std::streampos pos, const CartItem &item);
-
   public:
     /**
      * @brief 构造函数
      *
-     * @param db_filename 购物车数据库文件名
      */
-    CartManager(const std::string_view &db_filename)
-        : m_db_filename(db_filename) {}
+    CartManager() = default;
 
     /**
      * @brief 加载购物车数据
@@ -87,9 +73,9 @@ class CartManager {
      * 从数据库文件中筛选出指定用户且状态为未下单(NOT_ORDERED)的商品，加载到内存中
      *
      * @param user_id 用户 ID
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS，失败返回相应错误码
+     * @return 无返回值
      */
-    FileErrorCode load_cart(const int user_id);
+    void load_cart(const int user_id);
 
     /**
      * @brief 获取购物车商品列表指针
@@ -103,8 +89,10 @@ class CartManager {
     std::optional<std::vector<CartItem> *> get_cart_list_ptr() {
         if (is_loaded)
             return &cart_list;
-        else
+        else {
+            LOG_CRITICAL("购物车列表未加载到内存");
             return std::nullopt;
+        }
     }
 
     /**
@@ -115,25 +103,9 @@ class CartManager {
      * @param user_id 用户 ID
      * @param product_id 商品 ID
      * @param count 购买数量
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS，失败返回相应错误码
+     * @return 无返回值
      */
-    FileErrorCode add_item(const int user_id, const int product_id,
-                           const int count);
-
-    /**
-     * @brief 查找购物车商品
-     *
-     * 在数据库文件中查找符合条件的商品条目位置和内容。
-     *
-     * @param user_id 用户 ID
-     * @param product_id 商品 ID
-     * @param status_list 待匹配的状态列表（如查找未下单或已删除的记录）
-     * @return std::pair<std::streampos, CartItem>
-     * 返回文件流位置和对应的商品对象；若未找到，位置通常为 -1
-     */
-    std::pair<std::streampos, CartItem>
-    find_item(const int user_id, const int product_id,
-              std::vector<CartItemStatus> status_list);
+    void add_item(const int user_id, const int product_id, const int count);
 
     /**
      * @brief 更新购物车商品信息
@@ -143,13 +115,11 @@ class CartManager {
      * @param user_id 用户 ID
      * @param product_id 商品 ID
      * @param count 新的数量
-     * @param status 新的状态
      * @param delivery_selection 配送选项（默认为 -1 不变）
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS，失败返回相应错误码
+     * @return 无返回值
      */
-    FileErrorCode update_item(const int user_id, const int product_id,
-                              const int count, const CartItemStatus status,
-                              const int delivery_selection = -1);
+    void update_item(const int user_id, const int product_id, const int count,
+                     const int delivery_selection = -1);
 
     /**
      * @brief 删除购物车商品
@@ -158,9 +128,9 @@ class CartManager {
      *
      * @param user_id 用户 ID
      * @param product_id 商品 ID
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS，失败返回相应错误码
+     * @return 无返回值
      */
-    FileErrorCode delete_item(const int user_id, const int product_id);
+    void delete_item(const int user_id, const int product_id);
 
     /**
      * @brief 购物车结算准备

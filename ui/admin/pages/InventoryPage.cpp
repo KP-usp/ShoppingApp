@@ -1,6 +1,5 @@
 #include "InventoryPage.h"
 #include "SharedComponent.h"
-#include <fstream>
 #include <vector>
 
 void InventoryLayOut::init_page(AppContext &ctx,
@@ -71,17 +70,13 @@ void InventoryLayOut::init_page(AppContext &ctx,
                 }
 
                 // 调用 Manager 更新
-                auto res = ctx.product_manager.update_product(
+                ctx.product_manager.update_product(
                     edit_name, selected_product_id, price, stock);
 
-                if (res == FileErrorCode::OK) {
-                    show_popup = 0;
-                    refresh_list(ctx, list_container,
-                                 back_dashboard); // 刷新列表
-                    refresh_inventory_page();     // 刷新页面
-                } else {
-                    status_msg = "更新失败，数据库错误";
-                }
+                show_popup = 0;
+                refresh_list(ctx, list_container,
+                             back_dashboard); // 刷新列表
+                refresh_inventory_page();     // 刷新页面
             } catch (...) {
                 status_msg = "价格或库存格式错误！";
             }
@@ -141,16 +136,11 @@ void InventoryLayOut::init_page(AppContext &ctx,
                 double price = std::stod(new_prod_price_str);
                 int stock = std::stoi(new_prod_stock_str);
 
-                auto res = ctx.product_manager.add_product(new_prod_name, price,
-                                                           stock);
+                ctx.product_manager.add_product(new_prod_name, price, stock);
 
-                if (res == FileErrorCode::OK) {
-                    show_popup = 0;
-                    refresh_list(ctx, list_container, back_dashboard);
-                    refresh_inventory_page();
-                } else {
-                    status_msg = "添加失败";
-                }
+                show_popup = 0;
+                refresh_list(ctx, list_container, back_dashboard);
+                refresh_inventory_page();
             } catch (...) {
                 status_msg = "格式错误，价格和库存必须是数字";
             }

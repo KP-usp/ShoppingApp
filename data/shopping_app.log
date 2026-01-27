@@ -1,0 +1,69 @@
+[2026-01-26 20:51:47] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-26 20:51:47] [INFO] [Database.cpp:163] 数据库表初始化完成
+[2026-01-26 20:51:55] [INFO] [UserManager.cpp:39] 用户登录成功，用户名: zhang
+[2026-01-26 21:04:50] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-26 21:04:50] [INFO] [Database.cpp:163] 数据库表初始化完成
+[2026-01-26 21:04:57] [INFO] [UserManager.cpp:39] 用户登录成功，用户名: zhang
+[2026-01-26 21:06:03] [DEBUG] [ShopPage.cpp:78] 21312
+[2026-01-26 21:06:03] [DEBUG] [ShopPage.cpp:79] 36
+[2026-01-26 21:06:12] [DEBUG] [ShopPage.cpp:78] 21312
+[2026-01-26 21:06:12] [DEBUG] [ShopPage.cpp:79] 36
+[2026-01-26 21:24:46] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-26 21:24:46] [INFO] [Database.cpp:163] 数据库表初始化完成
+[2026-01-26 21:24:52] [INFO] [UserManager.cpp:39] 用户登录成功，用户名: zhang
+[2026-01-26 21:25:05] [DEBUG] [CartPage.cpp:92] 4
+[2026-01-26 21:25:05] [DEBUG] [CartPage.cpp:93] 更新数量
+[2026-01-26 21:28:47] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-26 21:28:47] [INFO] [Database.cpp:163] 数据库表初始化完成
+[2026-01-26 21:28:52] [INFO] [UserManager.cpp:39] 用户登录成功，用户名: zhang
+[2026-01-26 21:29:09] [DEBUG] [CartPage.cpp:92] 3
+[2026-01-26 21:29:09] [DEBUG] [CartPage.cpp:93] 更新数量
+[2026-01-26 21:29:09] [DEBUG] [ProductManager.cpp:123] 33
+[2026-01-26 21:33:26] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-26 21:33:26] [INFO] [Database.cpp:163] 数据库表初始化完成
+[2026-01-26 21:33:31] [INFO] [UserManager.cpp:39] 用户登录成功，用户名: zhang
+[2026-01-26 21:33:49] [DEBUG] [CartPage.cpp:92] 2
+[2026-01-26 21:33:49] [DEBUG] [CartPage.cpp:93] 更新数量
+[2026-01-26 21:33:49] [DEBUG] [ProductManager.cpp:123] -652637136
+[2026-01-26 21:36:41] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-26 21:36:41] [INFO] [Database.cpp:163] 数据库表初始化完成
+[2026-01-26 21:36:47] [INFO] [UserManager.cpp:39] 用户登录成功，用户名: zhang
+[2026-01-26 21:36:58] [DEBUG] [CartPage.cpp:84] 2
+[2026-01-26 21:36:58] [DEBUG] [ProductManager.cpp:123] -650336048
+[2026-01-26 21:38:59] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-26 21:39:00] [INFO] [Database.cpp:163] 数据库表初始化完成
+[2026-01-26 21:39:03] [INFO] [UserManager.cpp:39] 用户登录成功，用户名: zhang
+[2026-01-26 21:39:03] [ERROR] [Database.h:83] SQL 预处理失败: SELECT product_name, price, stock, status FROM products WHERE product_name = ? 错误原因: MySQL_Prepared_ResultSet::getInt: invalid value of 'columnIndex'
+[2026-01-26 21:39:03] [ERROR] [ProductManager.cpp:298] 获取商品信息失败，MySQL_Prepared_ResultSet::getInt: invalid value of 'columnIndex'
+[2026-01-26 21:39:03] [ERROR] [Database.h:83] SQL 预处理失败: SELECT product_name, price, stock, status FROM products WHERE product_name = ? 错误原因: MySQL_Prepared_ResultSet::getInt: invalid value of 'columnIndex'
+[2026-01-26 21:39:03] [ERROR] [ProductManager.cpp:298] 获取商品信息失败，MySQL_Prepared_ResultSet::getInt: invalid value of 'columnIndex'
+[2026-01-26 21:39:03] [ERROR] [Database.h:83] SQL 预处理失败: SELECT product_name, price, stock, status FROM products WHERE product_name = ? 错误原因: MySQL_Prepared_ResultSet::getInt: invalid value of 'columnIndex'
+[2026-01-26 21:39:03] [ERROR] [ProductManager.cpp:298] 获取商品信息失败，MySQL_Prepared_ResultSet::getInt: invalid value of 'columnIndex'
+[2026-01-26 21:39:14] [DEBUG] [CartPage.cpp:84] 2
+[2026-01-26 21:39:14] [DEBUG] [ProductManager.cpp:123] 2
+[2026-01-27 18:30:37] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-27 18:30:37] [INFO] [Database.cpp:163] 数据库表初始化完成
+[2026-01-27 18:31:04] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-27 18:31:04] [INFO] [Database.cpp:163] 数据库表初始化完成
+[2026-01-27 18:31:35] [INFO] [UserManager.cpp:104] 用户注册成功，用户名: keil
+[2026-01-27 18:31:44] [INFO] [UserManager.cpp:39] 用户登录成功，用户名: keil
+[2026-01-27 18:31:56] [INFO] [UserManager.cpp:44] 用户登录失败，用户名: lei
+[2026-01-27 18:32:00] [INFO] [UserManager.cpp:39] 用户登录成功，用户名: lei
+[2026-01-27 18:46:42] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-27 18:46:42] [INFO] [Database.cpp:163] 数据库表初始化完成
+[2026-01-27 18:46:48] [INFO] [UserManager.cpp:39] 用户登录成功，用户名: lei
+[2026-01-27 19:09:25] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-27 19:09:25] [ERROR] [main.cpp:29] 未找到环境变量 DB_PASSWORD
+[2026-01-27 19:10:56] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-27 19:10:56] [ERROR] [Database.cpp:42] MySQL 连接失败Access denied for user 'root'@'localhost' (using password: YES)
+[2026-01-27 19:10:56] [ERROR] [main.cpp:37] 无法连接到数据库，程序终止。
+[2026-01-27 19:14:55] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-27 19:14:55] [ERROR] [Database.cpp:42] MySQL 连接失败Access denied for user 'root'@'localhost' (using password: YES)
+[2026-01-27 19:14:55] [ERROR] [main.cpp:37] 无法连接到数据库，程序终止。
+[2026-01-27 19:17:56] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-27 19:17:56] [INFO] [main.cpp:36] 2
+[2026-01-27 19:17:56] [ERROR] [Database.cpp:42] MySQL 连接失败Access denied for user 'root'@'localhost' (using password: YES)
+[2026-01-27 19:17:56] [ERROR] [main.cpp:39] 无法连接到数据库，程序终止。
+[2026-01-27 19:20:00] [INFO] [main.cpp:23] Shopping App 启动中...
+[2026-01-27 19:20:00] [INFO] [main.cpp:36] 2652193990
+[2026-01-27 19:20:00] [INFO] [Database.cpp:164] 数据库表初始化完成

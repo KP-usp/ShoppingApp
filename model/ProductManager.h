@@ -6,12 +6,9 @@
  */
 
 #pragma once
-#include "FileError.h"
-#include "FixedString.h"
 #include <Utils.h>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
 /**
@@ -28,16 +25,15 @@ enum class ProductStatus {
  * @brief 商品信息结构体 (数据库存储格式)
  *
  * 存储商品的 ID、名称、价格、库存及当前状态。
- * 使用 FixedString 以确保文件读写时的定长对齐。
  */
 struct Product {
     static constexpr int MAX_PRODUCT_NAME_SIZE = 100;
 
-    FixedString<MAX_PRODUCT_NAME_SIZE> product_name; ///< 商品名称
-    int product_id;                                  ///< 商品唯一 ID
-    double price;                                    ///< 商品单价
-    int stock;                                       ///< 当前库存
-    ProductStatus status;                            ///< 商品状态
+    std::string product_name; ///< 商品名称
+    int product_id;           ///< 商品唯一 ID
+    double price;             ///< 商品单价
+    int stock;                ///< 当前库存
+    ProductStatus status;     ///< 商品状态
 
     Product() = default;
 
@@ -56,43 +52,26 @@ class ProductManager {
   private:
     using string_view = std::string_view;
 
-    // 商品数据库文件名
-    std::string m_db_filename;
-
     // 内存缓存：所有商品列表（供 UI 绘制及快速查询）
     std::vector<Product> product_list;
 
     // 标志位：product_list 是否已加载
     bool is_loaded = false;
 
-    // 辅助函数：初始化数据库，写入文件头（用于 ID 生成管理）
-    void init_db_file();
-
-    // 辅助函数：生成新 ID 并更新文件头计数器
-    int generate_and_update_id();
-
-    // 辅助函数：获取指定 ID 商品在文件流中的位置
-    std::optional<std::streampos> get_product_pos(const int product_id);
-
   public:
     /**
      * @brief 构造函数
-     *
-     * @param db_filename 商品数据库文件名
      */
-    ProductManager(const string_view &db_filename)
-        : m_db_filename(db_filename) {
-        init_db_file();
-    }
+    ProductManager() = default;
 
     /**
      * @brief 加载所有商品
      *
      * 从数据库中读取所有商品信息（包含已删除的商品）到内存缓存中。
      *
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS
+     * @return 无返回值
      */
-    FileErrorCode load_all_product();
+    void load_all_product();
 
     /**
      * @brief 添加新商品
@@ -100,10 +79,10 @@ class ProductManager {
      * @param product_name 商品名称
      * @param price 商品单价
      * @param stock 初始库存
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS
+     * @return 无返回值
      */
-    FileErrorCode add_product(const string_view &product_name,
-                              const double price, const int stock);
+    void add_product(const std::string &product_name, const double price,
+                     const int stock);
 
     /**
      * @brief 删除商品
@@ -111,22 +90,21 @@ class ProductManager {
      * 对商品进行软删除（状态置为 DELETED）。
      *
      * @param product_id 商品 ID
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS
+     * @return 无返回值
      */
-    FileErrorCode delete_product(const int product_id);
+    void delete_product(const int product_id);
 
     /**
      * @brief 更新商品信息
      *
-     * @param new_product_name 新商品名
+     * @param product_name 新商品名
      * @param product_id 目标商品 ID
-     * @param new_price 新价格
+     * @param price 新价格
      * @param stock 新库存
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS
+     * @return 无返回值
      */
-    FileErrorCode update_product(const string_view &new_product_name,
-                                 const int product_id, const double new_price,
-                                 const int stock);
+    void update_product(const std::string &product_name, const int product_id,
+                        const double price, const int stock);
 
     /**
      * @brief 搜索所有商品 (包括已删除)
@@ -155,25 +133,19 @@ class ProductManager {
      * 将已删除的商品状态恢复为 NORMAL。
      *
      * @param product_id 商品 ID
-     * @return FileErrorCode 成功返回 FileErrorCode::SUCCESS
+     * @return 无返回值
      */
-    FileErrorCode restore_product(const int product_id);
+    void restore_product(const int product_id);
 
     /**
      * @brief 获取单个商品信息
      *
-     * @param product_id 商品 ID
+     * @param product_id 商品 ID / product_name 商品名
      * @return std::optional<Product> 成功返回商品对象，失败返回 nullopt
      */
     std::optional<Product> get_product(const int product_id);
 
-    /**
-     * @brief 根据名称获取商品 ID
-     *
-     * @param product_name 商品名称（需完全匹配）
-     * @return const std::optional<int> 成功返回 ID，失败返回 nullopt
-     */
-    const std::optional<int> get_id_by_name(const string_view &product_name);
+    std::optional<Product> get_product(const std::string &product_name);
 
     /**
      * @brief 获取商品价格

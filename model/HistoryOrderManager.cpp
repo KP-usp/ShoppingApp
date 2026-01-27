@@ -5,308 +5,284 @@
  *            提供了历史记录的写入、聚合查询、状态更新（如取消/删除）
  *            以及清空历史记录（逻辑删除）的具体实现。
  * @author    KP-usp
- * @date      2025-01-7
- * @version   1.0
+ * @date      2025-01-24
+ * @version   2.0
  * @copyright Copyright (c) 2025
  */
 
 #include "HistoryOrderManager.h"
-#include <fstream>
-#include <iostream>
-#include <vector>
+#include "Database.h"
 
-using std::fstream;
-using std::ifstream;
-using std::ios_base;
-using std::ofstream;
 using std::string;
 
-// 辅助函数：更新底层文件状态
-FileErrorCode
-HistoryOrderManager::update_status_in_file(long long order_id,
-                                           FullOrderStatus new_status) {
-    string path = Utils::get_database_path(m_db_filename);
-    fstream iofile(path, ios_base::binary | ios_base::in | ios_base::out);
-
-    if (!iofile.is_open())
-        return FileErrorCode::OpenFailure;
-
-    HistoryOrderItem temp;
-    bool found = false;
-
-    while (iofile.read(reinterpret_cast<char *>(&temp),
-                       sizeof(HistoryOrderItem))) {
-        // 找到对应订单ID，且状态不一致时才写入
-        if (temp.order_id == order_id && temp.status != new_status) {
-            temp.status = new_status;
-
-            // 回退写指针
-            long write_pos = (long)iofile.tellg() - sizeof(HistoryOrderItem);
-            iofile.seekp(write_pos);
-            iofile.write(reinterpret_cast<const char *>(&temp),
-                         sizeof(HistoryOrderItem));
-
-            iofile.seekg(iofile.tellp());
-            found = true;
-        }
-    }
-    iofile.close();
-    return found ? FileErrorCode::OK : FileErrorCode::NotFound;
-}
-
-FileErrorCode
-HistoryOrderManager::cancel_history_order(const long long order_id,
-                                          ProductManager &product_manager) {
-    // 仅更新状态
-    return update_history_order_in_file(order_id, FullOrderStatus::CANCEL,
-                                        std::nullopt, std::nullopt);
-}
-
-FileErrorCode HistoryOrderManager::update_history_order_info(
-    const long long order_id, const std::string &new_address,
-    const int new_delivery_selection) {
-    // "" 表示不修改地址
-    if (new_address.empty()) {
-        return update_history_order_in_file(
-            order_id, std::nullopt, std::nullopt, new_delivery_selection);
-    }
-    // -1 表示不修改送达方式
-    if (new_delivery_selection == -1) {
-        return update_history_order_in_file(order_id, std::nullopt, new_address,
-                                            std::nullopt);
+void HistoryOrderManager::load_history_orders(const int user_id,
+                                              ProductManager &product_manager) {
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法加载历史订单信息到内存。");
     }
 
-    // 更新地址和配送方式，保持状态不变
-    return update_history_order_in_file(order_id, std::nullopt, new_address,
-                                        new_delivery_selection);
-}
-
-FileErrorCode HistoryOrderManager::update_history_order_in_file(
-    const long long order_id, std::optional<FullOrderStatus> new_status,
-    std::optional<std::string> new_address, std::optional<int> new_delivery) {
-
-    string path = Utils::get_database_path(m_db_filename);
-    std::fstream iofile(path, ios_base::binary | ios_base::in | ios_base::out);
-
-    if (!iofile.is_open()) {
-        return FileErrorCode::OpenFailure;
-    }
-
-    HistoryOrderItem temp;
-    bool found = false;
-
-    // 遍历整个文件，查找所有匹配 order_id 的记录
-    while (iofile.read(reinterpret_cast<char *>(&temp),
-                       sizeof(HistoryOrderItem))) {
-        if (temp.order_id == order_id) {
-            found = true;
-
-            // 修改需要更新的字段
-            if (new_status.has_value()) {
-                temp.status = new_status.value();
-            }
-            if (new_address.has_value()) {
-                temp.address = new_address.value();
-            }
-            if (new_delivery.has_value()) {
-                temp.delivery_selection = new_delivery.value();
-            }
-
-            // 回退写指针
-            long write_pos = (long)iofile.tellg() - sizeof(HistoryOrderItem);
-            iofile.seekp(write_pos);
-
-            iofile.write(reinterpret_cast<const char *>(&temp),
-                         sizeof(HistoryOrderItem));
-
-            iofile.seekg(iofile.tellp());
-        }
-    }
-
-    iofile.close();
-    return found ? FileErrorCode::OK : FileErrorCode::NotFound;
-}
-
-void HistoryOrderManager::check_and_update_arrived_orders(int user_id) {
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, std::ios_base::binary);
-    if (!infile.is_open())
-        return;
-
-    HistoryOrderItem temp;
-    time_t now = get_current_time();
-    std::vector<long long> orders_to_complete;
-
-    // 遍历寻找需要自动收货的订单ID
-    while (infile.read(reinterpret_cast<char *>(&temp),
-                       sizeof(HistoryOrderItem))) {
-        if (temp.id == user_id &&
-            temp.status == FullOrderStatus::NOT_COMPLETED) {
-
-            // 获取配送所需天数
-            int days_needed = 0;
-            if (temp.delivery_selection >= 0 &&
-                temp.delivery_selection < DELIVERY_DAYS.size()) {
-                days_needed = DELIVERY_DAYS[temp.delivery_selection];
-            }
-
-            // 计算预计到达时间
-            time_t arrival_time = temp.order_time + (days_needed * 86400);
-
-            // 如果当前时间超过了预计到达时间
-            if (now >= arrival_time) {
-                // 简单的去重检查
-                bool already_added = false;
-                for (long long id : orders_to_complete) {
-                    if (id == temp.order_id) {
-                        already_added = true;
-                        break;
-                    }
-                }
-                if (!already_added) {
-                    orders_to_complete.push_back(temp.order_id);
-                }
-            }
-        }
-    }
-    infile.close();
-
-    //  批量更新状态
-    for (long long order_id : orders_to_complete) {
-        update_status_in_file(order_id, FullOrderStatus::COMPLETED);
-    }
-}
-
-FileErrorCode
-HistoryOrderManager::load_history_orders(const int user_id,
-                                         ProductManager &product_manager) {
     // 先执行自动收货逻辑，确保数据最新
     check_and_update_arrived_orders(user_id);
 
     history_orders_map.clear();
     is_loaded = false;
 
-    string path = Utils::get_database_path(m_db_filename);
-    ifstream infile(path, std::ios_base::binary);
-    if (!infile.is_open()) {
-        return FileErrorCode::OpenFailure;
-    }
+    try {
+        Database::prepare(
+            "SELECT user_id, product_name, order_id, price, count, "
+            "UNIX_TIMESTAMP(order_time) AS order_time_unix, "
+            "delivery_selection, address, status FROM history_orders "
+            "WHERE user_id = ? AND status IN (1, -1) ",
+            [this, &product_manager, &user_id](sql::PreparedStatement *pstmt) {
+                pstmt->setInt(1, user_id);
 
-    HistoryOrderItem temp;
-    while (infile.read(reinterpret_cast<char *>(&temp),
-                       sizeof(HistoryOrderItem))) {
-        if (temp.id == user_id) {
+                std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
+                while (res->next()) {
+                    HistoryOrderItem temp;
 
-            // 只处理已完成或已取消的订单
-            if (temp.status == FullOrderStatus::COMPLETED ||
-                temp.status == FullOrderStatus::CANCEL) {
-                HistoryFullOrder &order = history_orders_map[temp.order_id];
+                    temp.id = res->getInt("user_id");
+                    if (temp.id == user_id) {
+                        temp.product_name = res->getString("product_name");
+                        temp.order_id = res->getInt64("order_id");
+                        temp.price = res->getDouble("price");
+                        temp.count = res->getInt("count");
+                        temp.order_time = static_cast<time_t>(
+                            res->getInt64("order_time_unix"));
+                        temp.delivery_selection =
+                            res->getInt("delivery_selection");
+                        temp.address = res->getString("address");
+                        temp.status =
+                            static_cast<FullOrderStatus>(res->getInt("status"));
 
-                // 计算商品总价
-                order.total_price += temp.count * temp.price;
+                        HistoryFullOrder &order =
+                            history_orders_map[temp.order_id];
 
-                // 初始化头部信息
-                if (order.items.empty()) {
-                    order.order_id = temp.order_id;
-                    order.order_time = temp.order_time;
-                    order.address = temp.address;
-                    order.status = temp.status;
+                        // 计算商品价格
+                        auto product_opt =
+                            product_manager.get_product(temp.product_name);
+                        if (!product_opt.has_value())
+                            LOG_CRITICAL("数据库原商品信息被物理删除！");
 
-                    // 加上运费
-                    if (temp.delivery_selection >= 0 &&
-                        temp.delivery_selection < 3)
-                        order.total_price +=
-                            DELIVERY_PRICES[temp.delivery_selection];
+                        auto pro_info = product_opt.value();
+
+                        double item_price = pro_info.price;
+                        order.total_price += temp.count * item_price;
+
+                        // 加载商品的信息，汇总到 map 中
+                        if (order.items.empty()) {
+                            // 第一次加载该 order_id 订单，加上运费
+                            order.total_price +=
+                                DELIVERY_PRICES[temp.delivery_selection];
+                            order.order_id = temp.order_id;
+                            order.order_time = temp.order_time;
+
+                            order.address = temp.address;
+                            order.status = temp.status;
+                        }
+
+                        order.items.push_back(temp);
+                    }
                 }
-                order.items.push_back(temp);
-            }
-        }
+            });
+
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("加载历史订单到内存失败");
     }
 
-    infile.close();
     is_loaded = true;
-    return FileErrorCode::OK;
 }
 
-FileErrorCode HistoryOrderManager::add_history_order(
-    const int user_id, ProductManager &product_manager,
-    std::vector<CartItem> cart_lists, const std::string address) {
+void HistoryOrderManager::add_history_order(const int user_id,
+                                            ProductManager &product_manager,
+                                            std::vector<CartItem> cart_lists,
+                                            const std::string address) {
 
-    time_t time = get_current_time();
     std::vector<HistoryOrderItem> history_order_list;
 
-    // 添加订单的默认初始状态是 NOT_COMPLETED
-    for (const auto &item : cart_lists) {
-        if (!product_manager.get_product(item.product_id).has_value())
-            return FileErrorCode::NotFound;
-        auto p = product_manager.get_product(item.product_id).value();
-        auto name = string(p.product_name);
-        int price = p.price;
-
-        HistoryOrderItem new_order(item.id, name, price, item.count, time,
-                                   item.delivery_selection, address,
-                                   FullOrderStatus::NOT_COMPLETED);
-        history_order_list.push_back(new_order);
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法添加历史订单到数据库。");
     }
 
-    string path = Utils::get_database_path(m_db_filename);
+    time_t time = get_current_time();
 
-    ofstream outfile(path, ios_base::binary | ios_base::app);
-    if (!outfile.is_open()) {
-        return FileErrorCode::OpenFailure;
-    }
-    for (const auto &history_order : history_order_list) {
-        outfile.write(reinterpret_cast<const char *>(&history_order),
-                      sizeof(HistoryOrderItem));
-    }
-    outfile.close();
+    try {
+        for (auto &cart_item : cart_lists) {
+            std::string sql =
+                "insert into history_orders (user_id, "
+                "product_name, price, order_id, "
+                "count, order_time,"
+                "delivery_selection, address, status) "
+                "values(?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?) ";
 
-    return FileErrorCode::OK;
+            Database::prepare(sql, [&cart_item, &time, &address,
+                                    &product_manager](
+                                       sql::PreparedStatement *pstmt) {
+                auto product_opt =
+                    product_manager.get_product(cart_item.product_id);
+                if (!product_opt.has_value())
+                    LOG_CRITICAL("数据库原商品信息被物理删除！");
+
+                auto pro_info = product_opt.value();
+
+                HistoryOrderItem new_order(
+                    cart_item.id, pro_info.product_name, pro_info.price,
+                    cart_item.count, time, cart_item.delivery_selection,
+                    address, FullOrderStatus::NOT_COMPLETED);
+
+                pstmt->setInt(1, cart_item.id);
+                pstmt->setString(2, pro_info.product_name);
+                pstmt->setDouble(3, pro_info.price);
+                pstmt->setInt64(4, cart_item.id + static_cast<int64_t>(time));
+                pstmt->setInt(5, cart_item.count);
+                pstmt->setInt(6, cart_item.delivery_selection);
+                pstmt->setString(7, address);
+                pstmt->setInt(8,
+                              static_cast<int>(FullOrderStatus::NOT_COMPLETED));
+                pstmt->executeUpdate();
+            });
+        }
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("添加历史订单失败: " + std::string(e.what()));
+    }
 }
 
-FileErrorCode
-HistoryOrderManager::delete_all_history_orders(const int user_id) {
-    string path = Utils::get_database_path(m_db_filename);
+void HistoryOrderManager::update_history_order(
+    const long long order_id, std::optional<FullOrderStatus> new_status,
+    std::optional<std::string> new_address, std::optional<int> new_delivery) {
 
-    fstream iofile(path, ios_base::binary | ios_base::in | ios_base::out);
-
-    if (!iofile.is_open()) {
-        return FileErrorCode::OpenFailure;
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法更新数据库中的历史订单。");
     }
 
-    HistoryOrderItem temp;
-    bool found_any = false;
+    if (!new_status.has_value() && !new_address.has_value() &&
+        !new_delivery.has_value()) {
+        return;
+    }
 
-    // 遍历文件
-    while (iofile.read(reinterpret_cast<char *>(&temp),
-                       sizeof(HistoryOrderItem))) {
+    try {
+        string sql = "UPDATE history_orders SET ";
+        bool need_comma = false; // 判断是否要在字段前加逗号
 
-        // 匹配用户ID，且当前状态不是 DELETED (避免重复写入)
-        if (temp.id == user_id && temp.status != FullOrderStatus::DELETED) {
-
-            temp.status = FullOrderStatus::DELETED;
-
-            long write_pos = (long)iofile.tellg() - sizeof(HistoryOrderItem);
-
-            iofile.seekp(write_pos);
-
-            iofile.write(reinterpret_cast<const char *>(&temp),
-                         sizeof(HistoryOrderItem));
-
-            iofile.seekg(iofile.tellp());
-
-            found_any = true;
+        // 修改需要更新的字段
+        if (new_status.has_value()) {
+            sql += "status = ? ";
+            need_comma = true;
         }
+        if (new_address.has_value()) {
+            if (need_comma)
+                sql += ", ";
+            sql += "address = ? ";
+            need_comma = true;
+        }
+        if (new_delivery.has_value()) {
+            if (need_comma)
+                sql += ", ";
+            sql += "delivery_selection = ? ";
+        }
+
+        sql += "WHERE order_id = ? ";
+
+        Database::prepare(sql, [&](sql::PreparedStatement *pstmt) {
+            int idx = 1;
+
+            if (new_status.has_value()) {
+                pstmt->setInt(idx++, static_cast<int>(new_status.value()));
+            }
+            if (new_address.has_value()) {
+                pstmt->setString(idx++, new_address.value());
+            }
+            if (new_delivery.has_value()) {
+                pstmt->setInt(idx++, new_delivery.value());
+            }
+
+            if (idx != 1)
+                pstmt->setInt(idx, order_id);
+            pstmt->executeUpdate();
+        });
+
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("更新数据库中的历史订单失败: " + std::string(e.what()));
+    }
+}
+
+void HistoryOrderManager::cancel_history_order(
+    const long long order_id, ProductManager &product_manager) {
+    // 仅更新状态
+    return update_history_order(order_id, FullOrderStatus::CANCEL, std::nullopt,
+                                std::nullopt);
+}
+
+void HistoryOrderManager::update_history_order_info(
+    const long long order_id, const std::string &new_address,
+    const int new_delivery_selection) {
+    // "" 表示不修改地址
+    if (new_address.empty()) {
+        return update_history_order(order_id, std::nullopt, std::nullopt,
+                                    new_delivery_selection);
+    }
+    // -1 表示不修改送达方式
+    if (new_delivery_selection == -1) {
+        return update_history_order(order_id, std::nullopt, new_address,
+                                    std::nullopt);
     }
 
-    iofile.close();
+    // 更新地址和配送方式，保持状态不变
+    return update_history_order(order_id, std::nullopt, new_address,
+                                new_delivery_selection);
+}
 
-    // 如果内存中已加载该用户的数据，清空内存缓存以保持同步
-    if (is_loaded) {
-        history_orders_map.clear();
-        // 此时 is_loaded 仍为 true，但 map 为空，表现为无历史记录
+void HistoryOrderManager::check_and_update_arrived_orders(int user_id) {
+
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法更新到达的历史订单状态。");
     }
 
-    // 只要文件操作没问题，就算没找到订单也返回 OK
-    return FileErrorCode::OK;
+    time_t now = get_current_time();
+
+    try {
+
+        string sql =
+            "UPDATE history_orders SET status = ? WHERE user_id = ? AND "
+            "status = ? AND (UNIX_TIMESTAMP(order_time) + CASE "
+            "delivery_selection ";
+
+        for (int i = 0; i < DELIVERY_DAYS.size(); i++) {
+            long long seconds = (long long)DELIVERY_DAYS[i] * 86400;
+            sql += "WHEN " + std::to_string(i) + " THEN " +
+                   std::to_string(seconds) + " ";
+        }
+
+        sql += "ELSE 3153600000 END) <= ?";
+
+        Database::prepare(sql, [&user_id, &now](sql::PreparedStatement *pstmt) {
+            pstmt->setInt(1, static_cast<int>(FullOrderStatus::COMPLETED));
+            pstmt->setInt(2, user_id);
+            pstmt->setInt(3, static_cast<int>(FullOrderStatus::NOT_COMPLETED));
+            pstmt->setInt64(4, static_cast<int64_t>(now));
+            pstmt->executeUpdate();
+        });
+
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("更新到达的历史订单状态失败。");
+    }
+}
+
+void HistoryOrderManager::delete_all_history_orders(const int user_id) {
+
+    if (!Database::is_connected()) {
+        LOG_ERROR("数据库未连接，无法删除数据库中的历史订单。");
+    }
+
+    try {
+        string sql = "UPDATE history_orders SET status = ? WHERE user_id = ? ";
+
+        Database::prepare(sql, [&](sql::PreparedStatement *pstmt) {
+            pstmt->setInt(1, static_cast<int>(FullOrderStatus::DELETED));
+            pstmt->setInt(2, user_id);
+            pstmt->executeUpdate();
+        });
+
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("更新数据库中的历史订单失败: " + std::string(e.what()));
+    }
 }

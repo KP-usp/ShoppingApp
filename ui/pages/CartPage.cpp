@@ -2,7 +2,6 @@
 #include "LocationUtils.h"
 #include "SharedComponent.h"
 #include <algorithm>
-#include <fstream>
 
 void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
                            std::function<void()> on_orders_info,
@@ -70,48 +69,47 @@ void CartLayOut::init_page(AppContext &ctx, std::function<void()> on_shopping,
         auto btn_hint_no_choice = Button("确定", [this] { show_popup = 0; });
 
         // 提示支付成功
-        auto btn_hint_payment_success = Button("确定", [&ctx, &cart_list, this,
-                                                        on_shopping,
-                                                        on_orders_info,
-                                                        checkout_success] {
-            int user_id = (*(ctx.current_user)).id;
+        auto btn_hint_payment_success =
+            Button("确定", [&ctx, &cart_list, this, on_shopping, on_orders_info,
+                            checkout_success] {
+                int user_id = (*(ctx.current_user)).id;
 
-            for (int i = 0; i < cart_list.size(); i++) {
-                if (is_chosen[i] == true) {
+                for (int i = 0; i < cart_list.size(); i++) {
+                    if (is_chosen[i] == true) {
 
-                    int product_id = cart_list[i].product_id;
-                    int count = quantities[i];
-                    int delivery_selected = delivery_selections[i];
+                        int product_id = cart_list[i].product_id;
+                        int count = quantities[i];
+                        int delivery_selected = delivery_selections[i];
 
-                    // 主要是为了加递送选项
-                    ctx.cart_manager.update_item(user_id, product_id, count,
-                                                 CartItemStatus::NOT_ORDERED,
-                                                 delivery_selections[i]);
+                        // 主要是为了加递送选项
+                        ctx.cart_manager.update_item(user_id, product_id, count,
+                                                     delivery_selections[i]);
 
-                    auto p_opt = ctx.product_manager.get_product(product_id);
-                    if (p_opt.has_value()) {
-                        auto p = p_opt.value();
+                        auto p_opt =
+                            ctx.product_manager.get_product(product_id);
+                        if (p_opt.has_value()) {
+                            auto p = p_opt.value();
 
-                        ctx.product_manager.update_product(
-                            p.product_name, p.product_id, p.price,
-                            p.stock - count);
+                            ctx.product_manager.update_product(
+                                p.product_name, p.product_id, p.price,
+                                p.stock - count);
+                        }
                     }
                 }
-            }
 
-            // 添加到订单数据库中
-            auto ordered_cart_lists = ctx.cart_manager.checkout(user_id);
+                // 添加到订单数据库中
+                auto ordered_cart_lists = ctx.cart_manager.checkout(user_id);
 
-            ctx.order_manager.add_order(user_id, ordered_cart_lists,
-                                        input_address);
-            // 添加快照到历史订单数据库
-            ctx.history_order_manager.add_history_order(
-                user_id, ctx.product_manager, ordered_cart_lists,
-                input_address);
+                ctx.order_manager.add_order(user_id, ordered_cart_lists,
+                                            input_address);
+                // 添加快照到历史订单数据库
+                ctx.history_order_manager.add_history_order(
+                    user_id, ctx.product_manager, ordered_cart_lists,
+                    input_address);
 
-            show_popup = 0;
-            checkout_success();
-        });
+                show_popup = 0;
+                checkout_success();
+            });
 
         // 收货地址输入框
         auto input_address_component =

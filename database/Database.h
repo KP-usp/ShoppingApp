@@ -1,4 +1,5 @@
 #pragma once
+#include "Logger.h"
 #include <cppconn/prepared_statement.h>
 #include <cppconn/resultset.h>
 #include <cppconn/statement.h>
@@ -6,6 +7,15 @@
 #include <mutex>
 #include <mysql_connection.h>
 #include <mysql_driver.h>
+
+// 基本连接参数
+struct DbConfig {
+    std::string host = "localhost";
+    std::string user = "root";
+    std::string password;
+    std::string database;
+    bool enable_local_infile = true;
+};
 
 // 数据库连接类
 class Database {
@@ -29,9 +39,7 @@ class Database {
     Database() = default;
 
   public:
-    static bool connect(const std::string &host, const std::string &user,
-                        const std::string &password,
-                        const std::string &database);
+    static bool connect(const DbConfig &config);
 
     // 获取连接
     static sql::Connection *get_connection();
@@ -74,7 +82,12 @@ void Database::prepare(const std::string &sql, Func &&callback) {
     if (!is_connected()) {
         throw std::runtime_error("数据库未连接，请先调用 connect()");
     }
-
-    std::unique_ptr<sql::PreparedStatement> pstmt(con->prepareStatement(sql));
-    callback(pstmt.get());
+    try {
+        std::unique_ptr<sql::PreparedStatement> pstmt(
+            con->prepareStatement(sql));
+        callback(pstmt.get());
+    } catch (sql::SQLException &e) {
+        LOG_ERROR("SQL 预处理失败: " + sql + " 错误原因: " + e.what());
+        throw;
+    }
 }

@@ -1,5 +1,4 @@
 #include "Database.h"
-#include "Logger.h"
 #include <stdexcept>
 
 // 定义静态数据成员
@@ -8,9 +7,7 @@ std::mutex Database::mutex;
 std::unique_ptr<sql::Connection> Database::con;
 bool Database::is_tables_initialized = false;
 
-bool Database::connect(const std::string &host, const std::string &user,
-                       const std::string &password,
-                       const std::string &database) {
+bool Database::connect(const DbConfig &config) {
 
     try {
         if (is_connected())
@@ -19,11 +16,23 @@ bool Database::connect(const std::string &host, const std::string &user,
         // 获取驱动实例
         driver = sql::mysql::get_mysql_driver_instance();
 
-        // 创建连接
-        con.reset(driver->connect(host, user, password));
+        sql::ConnectOptionsMap props;
 
-        // 选择数据库
-        con->setSchema(database);
+        props["hostName"] = config.host;
+        props["userName"] = config.user;
+        props["password"] =
+            config.password; // 这里的 password 应该是已经从安全源读取后的值
+        props["schema"] = config.database;
+
+        if (config.enable_local_infile) {
+            props["OPT_LOCAL_INFILE"] = 1;
+        }
+
+        // 设置超时时间，防止程序卡死
+        props["OPT_CONNECT_TIMEOUT"] = 5;
+
+        // 使用属性图创建连接
+        con.reset(driver->connect(props));
 
         // 初始化表结构
         initialize_tables();
@@ -33,6 +42,8 @@ bool Database::connect(const std::string &host, const std::string &user,
         LOG_ERROR("MySQL 连接失败" + std::string(e.what()));
         return false;
     }
+
+    LOG_INFO("数据库初始化并链接成功");
 }
 
 sql::Connection *Database::get_connection() {
@@ -83,30 +94,30 @@ void Database::initialize_tables() {
               product_name VARCHAR(100) NOT NULL UNIQUE, 
               price DOUBLE NOT NULL,
               stock INT NOT NULL DEFAULT 0,
-              status TINYINT DEFAULT 0,      
+              status TINYINT DEFAULT 0,
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
           ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
              )";
 
         // 创建 carts 表
         std::string create_carts_table = R"(
-              CREATE TABLE IF NOT EXISTS cart_items (
+              CREATE TABLE IF NOT EXISTS carts (
               id INT AUTO_INCREMENT,          
               user_id INT NOT NULL,
-              product_id INT NOT NULL,
+              product_id INT NOT NULL, 
               count INT NOT NULL DEFAULT 1,
               status TINYINT DEFAULT 0,       
               delivery_selection INT DEFAULT -1,
               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
               PRIMARY KEY (id),
               INDEX idx_user_status (user_id, status),
-              UNIQUE KEY uk_user_product (user_id, product_id)
+              UNIQUE KEY uk_user_product (user_id, product_id, status)
               ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             )";
 
         // 创建 orders 表
         std::string create_orders_table = R"(
-              CREATE TABLE orders (
+              CREATE TABLE IF NOT EXISTS orders (
               id INT AUTO_INCREMENT,
               user_id INT NOT NULL,
               product_id INT NOT NULL,

@@ -1,6 +1,5 @@
 #include "HistoryOrderPage.h"
 #include "SharedComponent.h"
-#include <fstream>
 
 void HistoryOrderLayOut::init_page(
     AppContext &ctx, std::function<void()> on_orders_info,
@@ -70,7 +69,8 @@ void HistoryOrderLayOut::init_page(
                         nullptr);
 
                 // 如果数据源没了，或者订单ID找不到了，就渲染个空的或错误提示
-                if (!map_ptr || map_ptr->find(order_id) == map_ptr->end()) {
+                if (map_ptr->find(order_id) == map_ptr->end()) {
+                    LOG_ERROR("订单 ID 找不到了");
                     return text("数据已更新，请刷新") | color(Color::Red);
                 }
 
@@ -253,7 +253,6 @@ void HistoryOrderLayOut::init_page(
         });
 
     } else {
-
         this->component = Renderer(btn_container, [=] {
             return vbox(
                 {// 标题栏

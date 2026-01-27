@@ -75,6 +75,10 @@ void ShopLayOut::init_page(AppContext &ctx, std::function<void()> on_checkout,
 
                     if (qty > 0) {
                         if (current_products[i].stock - qty <= 0) {
+
+                            quantities[i] = 0;
+                            quantities_str[i] = "0";
+
                             show_popup = 2;
                             return;
                         }

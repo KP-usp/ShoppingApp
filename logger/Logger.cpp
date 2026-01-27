@@ -113,41 +113,6 @@ void Logger::log(LogLevel level, const std::string &message,
     write_log(level, message, file, line);
 }
 
-void Logger::log_error(FileErrorCode error, const std::string &context,
-                       const std::string &file, int line) {
-    std::string error_msg;
-
-    switch (error) {
-    case FileErrorCode::OK:
-        error_msg = "Operation successful";
-        break;
-    case FileErrorCode::NotFound:
-        error_msg = "File or record not found";
-        break;
-    case FileErrorCode::OpenFailure:
-        error_msg = "Failed to open file";
-        break;
-    case FileErrorCode::WriteFailure:
-        error_msg = "Failed to write to file";
-        break;
-    case FileErrorCode::ReadFailure:
-        error_msg = "Failed to read from file";
-        break;
-    case FileErrorCode::DeleteFailure:
-        error_msg = "Failed to delete record";
-        break;
-    case FileErrorCode::SeekFailure:
-        error_msg = "Failed to seek in file";
-        break;
-    default:
-        error_msg = "Unknown error code";
-        break;
-    }
-
-    std::string full_message = context + " - " + error_msg;
-    log(LogLevel::ERROR, full_message, file, line);
-}
-
 void Logger::set_level(LogLevel level) {
     std::lock_guard<std::mutex> lock(mutex);
     min_level = level;

@@ -1,5 +1,4 @@
 #include "ShopAppUI.h"
-#include <fstream>
 
 ShopAppUI::ShopAppUI(AppContext &context) : ctx(context) {
 
