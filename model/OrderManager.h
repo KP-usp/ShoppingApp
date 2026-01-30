@@ -150,6 +150,7 @@ class OrderManager {
             return &orders_map;
         else {
             LOG_CRITICAL("订单列表未加载到内存");
+            throw std::runtime_error("订单列表未加载到内存");
             return std::nullopt;
         }
     }

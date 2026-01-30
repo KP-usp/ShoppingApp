@@ -188,10 +188,10 @@ class HistoryOrderManager {
             return &history_orders_map;
         else {
             LOG_CRITICAL("历史订单列表未加载到内存");
+            throw std::runtime_error("历史订单列表未加载到内存");
             return std::nullopt;
         }
     }
-
     // 析构器
     ~HistoryOrderManager() {}
 };

@@ -67,6 +67,11 @@ class CartLayOut {
 
     Component get_component() { return component; }
 
+    // 重建 UI 列表
+    void rebuild_cart_list_ui(Component main_container, AppContext &ctx,
+                              std::vector<CartItem> &cart_list,
+                              std::function<void()> delete_item_success);
+
     void refresh(AppContext &ctx, std::function<void()> on_shopping,
                  std::function<void()> on_orders_info,
                  std::function<void()> delete_item_success,

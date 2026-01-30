@@ -38,9 +38,11 @@ void OrderManager::load_full_orders(const int user_id,
             "SELECT user_id, product_id, order_id, "
             "count, UNIX_TIMESTAMP(order_time) AS order_time_unix, "
             "delivery_selection, address, status  FROM orders "
-            "WHERE user_id = ? ",
+            "WHERE user_id = ? AND status = ?",
             [this, &product_manager, &user_id](sql::PreparedStatement *pstmt) {
                 pstmt->setInt(1, user_id);
+                pstmt->setInt(2,
+                              static_cast<int>(FullOrderStatus::NOT_COMPLETED));
                 std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
                 while (res->next()) {
                     OrderItem temp;

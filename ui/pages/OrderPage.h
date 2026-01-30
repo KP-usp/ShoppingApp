@@ -56,6 +56,12 @@ class OrderLayOut {
                    std::function<void()> on_orders_update,
                    std::function<void()> on_orders_delete);
 
+    // 清空列表
+    void rebuild_order_list_ui(AppContext &ctx, Component main_container,
+                               std::map<long long, FullOrder> *orders_map_ptr,
+                               std::function<void()> on_orders_update,
+                               std::function<void()> on_orders_delete);
+
     void refresh(AppContext &ctx, std::function<void()> on_checkout,
                  std::function<void()> on_shopping,
                  std::function<void()> on_history_orders_info,

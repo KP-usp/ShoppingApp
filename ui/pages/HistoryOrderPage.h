@@ -38,6 +38,10 @@ class HistoryOrderLayOut {
                    std::function<void()> on_shopping,
                    std::function<void()> refresh_history_order_page);
 
+    void rebuild_history_order_list_ui(
+        AppContext &ctx, Component main_container,
+        std::map<long long, HistoryFullOrder> *histroy_orders_map_ptr);
+
     void refresh(AppContext &ctx, std::function<void()> on_orders_info,
                  std::function<void()> on_shopping,
                  std::function<void()> refresh_history_order_page) {

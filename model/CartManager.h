@@ -91,6 +91,7 @@ class CartManager {
             return &cart_list;
         else {
             LOG_CRITICAL("购物车列表未加载到内存");
+            throw std::runtime_error("购物车列表未加载到内存");
             return std::nullopt;
         }
     }
