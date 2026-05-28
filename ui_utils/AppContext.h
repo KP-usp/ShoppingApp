@@ -23,11 +23,9 @@ struct AppContext {
     // 构造函数
     AppContext() = default;
 
-    // 禁用赋值函数，采用单例
-    AppContext &operator=(const AppContext &&) = delete;
-    AppContext &operator=(const AppContext &) = delete;
+    // 禁用拷贝和移动构造及赋值函数，采用单例
     AppContext &operator=(AppContext &&) = delete;
-
-    // 禁用移动构造函数，采用单例
+    AppContext &operator=(const AppContext &) = delete;
     AppContext(AppContext &&) = delete;
+    AppContext(const AppContext &);
 };

@@ -1,15 +1,3 @@
-/**
- * @file      UserManager.cpp
- * @brief     用户管理模块实现文件
- * @details   实现了 User 类和 UserManager 类的核心逻辑，
- *            包括注册校验、登录验证（哈希比对）、
- *             负责处理储存在 MySQL 表单的用户数据的CRUD 操作。
- * @author    KP-usp
- * @date      2025-01-23
- * @version   2.0
- * @copyright Copyright (c) 2025
- */
-
 #include "UserManager.h"
 #include "Database.h"
 #include <ctime>
@@ -25,7 +13,6 @@ using std::string;
 
 Result UserManager::check_login(const string &username,
                                 const string &input_password) {
-    // 这里 user  的状态已经是正常的
     optional<User> user_opt = get_user_by_name(username);
 
     if (user_opt.has_value()) {
@@ -63,7 +50,7 @@ Result UserManager::is_valid_username_format(const string &username,
 }
 
 Result UserManager::is_valid_password_format(const string &password,
-                                             string &error_message) {
+                                              string &error_message) {
 
     if (password.empty()) {
         error_message = "密码不能为空";
@@ -97,7 +84,6 @@ Result UserManager::check_register(const string &username,
 
     string hash_password = SecurityUtils::hash_password(password);
 
-    // 添加加密密码的用户
     User temp(username, hash_password, false);
     append_user(temp);
 
@@ -115,16 +101,12 @@ void UserManager::append_user(const User &new_user) {
     bool is_admin = new_user.is_admin;
 
     try {
-        std::string sql = "INSERT INTO users (username, password, is_admin) "
-                          "VALUES(?, ?, ?)";
-        Database::prepare(sql, [&username, &password,
-                                &is_admin](sql::PreparedStatement *pstmt) {
-            pstmt->setString(1, username);
-            pstmt->setString(2, password);
-            pstmt->setBoolean(3, is_admin);
-            pstmt->executeUpdate();
-        });
-    } catch (sql::SQLException &e) {
+        Database::get_session()
+            .sql("INSERT INTO users (username, password, is_admin) "
+                 "VALUES(?, ?, ?)")
+            .bind(username, password, is_admin)
+            .execute();
+    } catch (const mysqlx::Error &e) {
         LOG_ERROR("添加新用户失败: " + std::string(e.what()));
     }
 }
@@ -136,48 +118,40 @@ void UserManager::update_user(const int id, const string username,
     }
 
     try {
-        Database::prepare(
-            "UPDATE users SET username = ?, password = ?, is_admin = ? WHERE "
-            "id = ?",
-            [&username, &password, &is_admin,
-             &id](sql::PreparedStatement *pstmt) {
-                pstmt->setString(1, username);
-                pstmt->setString(2, password);
-                pstmt->setBoolean(3, is_admin);
-                pstmt->setInt(4, id);
-                pstmt->executeUpdate();
-            });
-    } catch (sql::SQLException &e) {
+        string hash_password = SecurityUtils::hash_password(password);
+        Database::get_session()
+            .sql("UPDATE users SET username = ?, password = ?, is_admin = ? "
+                 "WHERE id = ?")
+            .bind(username, hash_password, is_admin, id)
+            .execute();
+    } catch (const mysqlx::Error &e) {
         LOG_ERROR("更新用户失败: " + std::string(e.what()));
     }
 }
 
 optional<User> UserManager::get_user_by_name(const string &username) {
-    auto con = Database::get_connection();
-    if (!con)
+    if (!Database::is_connected())
         LOG_ERROR("数据库未连接，无法获取用户信息。");
 
-    // 查询结果
     optional<User> result = nullopt;
 
     try {
-        Database::prepare(
-            "SELECT id, username, password, is_admin FROM users "
-            "WHERE username = ? ",
-            [&](sql::PreparedStatement *pstmt) {
-                pstmt->setString(1, username);
-                std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-                if (res->next()) {
-                    User temp;
-                    temp.id = res->getInt("id");
-                    temp.username = string(res->getString("username"));
-                    temp.password = string(res->getString("password"));
-                    temp.is_admin = res->getBoolean("is_admin");
+        auto res = Database::get_session()
+                       .sql("SELECT id, username, password, is_admin FROM users "
+                            "WHERE username = ?")
+                       .bind(username)
+                       .execute();
+        auto row = res.fetchOne();
+        if (row) {
+            User temp;
+            temp.id = row[0].get<int>();
+            temp.username = row[1].get<std::string>();
+            temp.password = row[2].get<std::string>();
+            temp.is_admin = row[3].get<bool>();
 
-                    result = temp;
-                }
-            });
-    } catch (sql::SQLException &e) {
+            result = temp;
+        }
+    } catch (const mysqlx::Error &e) {
         LOG_ERROR("根据用户名获取用户信息失败，" + string(e.what()));
     }
 
@@ -185,31 +159,28 @@ optional<User> UserManager::get_user_by_name(const string &username) {
 }
 
 std::optional<User> UserManager::get_user_by_id(const int user_id) {
-    auto con = Database::get_connection();
-    if (!con)
+    if (!Database::is_connected())
         LOG_ERROR("数据库未连接，无法获取用户信息。");
 
-    // 查询结果
     optional<User> result = nullopt;
 
     try {
-        std::string sql = "SELECT id, username, password, is_admin FROM users "
-                          "WHERE id = ?";
-        Database::prepare(sql, [&](sql::PreparedStatement *pstmt) {
-            pstmt->setInt(1, user_id);
+        auto res = Database::get_session()
+                       .sql("SELECT id, username, password, is_admin FROM users "
+                            "WHERE id = ?")
+                       .bind(user_id)
+                       .execute();
+        auto row = res.fetchOne();
+        if (row) {
+            User temp;
+            temp.id = row[0].get<int>();
+            temp.username = row[1].get<std::string>();
+            temp.password = row[2].get<std::string>();
+            temp.is_admin = row[3].get<bool>();
 
-            std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-            if (res->next()) {
-                User temp;
-                temp.id = res->getInt("id");
-                temp.username = string(res->getString("username"));
-                temp.password = string(res->getString("password"));
-                temp.is_admin = res->getBoolean("is_admin");
-
-                result = temp;
-            }
-        });
-    } catch (sql::SQLException &e) {
+            result = temp;
+        }
+    } catch (const mysqlx::Error &e) {
         LOG_ERROR("根据用户 id 获取用户信息失败，" + string(e.what()));
     }
 
@@ -217,58 +188,54 @@ std::optional<User> UserManager::get_user_by_id(const int user_id) {
 }
 
 std::vector<User> UserManager::search_users_list(const string &query) {
-    auto con = Database::get_connection();
-    if (!con)
+    if (!Database::is_connected())
         LOG_ERROR("数据库未连接，无法搜索用户列表。");
 
-    // 搜索结果
     std::vector<User> result;
 
     try {
-        Database::prepare(
-            "SELECT id, username, password, is_admin, status FROM users",
-            [&query, &result](sql::PreparedStatement *pstmt) {
-                std::unique_ptr<sql::ResultSet> res(pstmt->executeQuery());
-                while (res->next()) {
-                    User temp;
+        auto res = Database::get_session()
+                       .sql("SELECT id, username, password, is_admin, status "
+                            "FROM users")
+                       .execute();
 
-                    if (query.empty()) {
-                        temp.id = res->getInt("id");
-                        temp.username = res->getString("username");
-                        temp.password = res->getString("password");
-                        temp.is_admin = res->getBoolean("is_admin");
-                        temp.status =
-                            static_cast<UserStatus>(res->getInt("status"));
-                        result.push_back(temp);
-                        continue;
-                    }
+        while (auto row = res.fetchOne()) {
+            User temp;
 
-                    string low_query = query;
+            if (query.empty()) {
+                temp.id = row[0].get<int>();
+                temp.username = row[1].get<std::string>();
+                temp.password = row[2].get<std::string>();
+                temp.is_admin = row[3].get<bool>();
+                temp.status = static_cast<UserStatus>(row[4].get<int>());
+                result.push_back(temp);
+                continue;
+            }
 
-                    std::transform(low_query.begin(), low_query.end(),
-                                   low_query.begin(), ::tolower);
+            string low_query = query;
 
-                    temp.id = res->getInt("id");
-                    temp.username = string(res->getString("username"));
-                    temp.password = string(res->getString("password"));
-                    temp.is_admin = res->getBoolean("is_admin");
-                    temp.status =
-                        static_cast<UserStatus>(res->getInt("status"));
+            std::transform(low_query.begin(), low_query.end(),
+                           low_query.begin(), ::tolower);
 
-                    string user_id_str = std::to_string(temp.id);
-                    string username_str = string(temp.username);
+            temp.id = row[0].get<int>();
+            temp.username = row[1].get<std::string>();
+            temp.password = row[2].get<std::string>();
+            temp.is_admin = row[3].get<bool>();
+            temp.status = static_cast<UserStatus>(row[4].get<int>());
 
-                    if (user_id_str == low_query) {
-                        result.push_back(temp);
-                        break;
-                    }
+            string user_id_str = std::to_string(temp.id);
+            string username_str = string(temp.username);
 
-                    if (username_str.find(low_query) != string::npos) {
-                        result.push_back(temp);
-                    }
-                }
-            });
-    } catch (sql::SQLException &e) {
+            if (user_id_str == low_query) {
+                result.push_back(temp);
+                break;
+            }
+
+            if (username_str.find(low_query) != string::npos) {
+                result.push_back(temp);
+            }
+        }
+    } catch (const mysqlx::Error &e) {
         LOG_ERROR("搜索用户列表失败，" + string(e.what()));
     };
     return result;
@@ -280,15 +247,11 @@ void UserManager::delete_user(const int user_id) {
     }
 
     try {
-
-        Database::prepare("UPDATE users SET status = ? WHERE id = ?",
-                          [&user_id](sql::PreparedStatement *pstmt) {
-                              pstmt->setInt(
-                                  1, static_cast<int>(UserStatus::DELETED));
-                              pstmt->setInt(2, user_id);
-                              pstmt->executeUpdate();
-                          });
-    } catch (sql::SQLException &e) {
+        Database::get_session()
+            .sql("UPDATE users SET status = ? WHERE id = ?")
+            .bind(static_cast<int>(UserStatus::DELETED), user_id)
+            .execute();
+    } catch (const mysqlx::Error &e) {
         LOG_ERROR("删除用户失败: " + std::string(e.what()));
     }
 }
@@ -300,14 +263,11 @@ void UserManager::restore_user(const int user_id) {
     }
 
     try {
-
-        Database::prepare("UPDATE users SET status = ? WHERE id = ?",
-                          [&user_id](sql::PreparedStatement *pstmt) {
-                              pstmt->setInt(1, 0);
-                              pstmt->setInt(2, user_id);
-                              pstmt->executeUpdate();
-                          });
-    } catch (sql::SQLException &e) {
+        Database::get_session()
+            .sql("UPDATE users SET status = ? WHERE id = ?")
+            .bind(0, user_id)
+            .execute();
+    } catch (const mysqlx::Error &e) {
         LOG_ERROR("恢复用户失败: " + std::string(e.what()));
     }
 }

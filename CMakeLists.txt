@@ -7,25 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
-# -- 外部库-- 引入 (1) nlohmann/json
-FetchContent_Declare(
-  json
-  GIT_REPOSITORY https://github.com/nlohmann/json.git
-  GIT_TAG v3.11.2)
-
-# (2) cpp-httplib (网络请求)
-FetchContent_Declare(
-  httplib
-  GIT_REPOSITORY https://github.com/yhirose/cpp-httplib
-  GIT_TAG v0.14.1)
-
-# (3) FTXUI (界面)
-FetchContent_Declare(
-  ftxui
-  GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI
-  GIT_TAG v5.0.0)
-
-FetchContent_MakeAvailable(json httplib ftxui)
+# ---------- 使用 find_package 替代 FetchContent ----------
+# nlohmann-json (header-only, 但 vcpkg 提供 target)
+find_package(nlohmann_json CONFIG REQUIRED)
+# cpp-httplib
+find_package(httplib CONFIG REQUIRED)   # 注意：vcpkg 的包名叫 cpp-httplib，但 CMake target 是 httplib::httplib
+# FTXUI (由三个组件组成)
+find_package(ftxui CONFIG REQUIRED COMPONENTS screen dom component)
+# ---------------------------------------------------------
 
 # 寻找系统中下载的库（加密 + 线程）
 find_package(OpenSSL REQUIRED)
