@@ -1,10 +1,9 @@
 build/
-bin/
 
 compile_commands.json
 
-.cache/
+.vscode/
 
-./debug_template.txt
+vcpkg.json
 
 
